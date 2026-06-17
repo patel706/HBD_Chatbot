@@ -1,0 +1,54 @@
+{
+  "faqs": [
+    {
+      "id": "missed_question",
+      "patterns": [
+        "refund my money"
+      ],
+      "tags": [
+        "unanswered"
+      ],
+      "answer": ""
+    },
+    {
+      "id": "missed_question",
+      "patterns": [
+        "exit"
+      ],
+      "tags": [
+        "unanswered"
+      ],
+      "answer": ""
+    },
+    {
+      "id": "missed_question",
+      "patterns": [
+        "9313428775"
+      ],
+      "tags": [
+        "unanswered"
+      ],
+      "answer": ""
+    },
+    {
+      "id": "missed_question",
+      "patterns": [
+        "hhello"
+      ],
+      "tags": [
+        "unanswered"
+      ],
+      "answer": ""
+    },
+    {
+      "id": "missed_question",
+      "patterns": [
+        "ck"
+      ],
+      "tags": [
+        "unanswered"
+      ],
+      "answer": ""
+    }
+  ]
+}

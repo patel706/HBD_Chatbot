@@ -1,0 +1,462 @@
+{
+  "faqs": [
+    {
+      "id": "about_website",
+      "patterns": [
+        "what is city hang around",
+        "what is this website about",
+        "what does cityhangaround do",
+        "purpose of city hang around",
+        "why should i use this website",
+        "what can i find on city hang around"
+      ],
+      "tags": ["about", "website", "platform"],
+      "answer": "CityHangAround is a city discovery platform that helps users explore places, hangout spots, food locations, and popular destinations within a city. The website is designed to help people decide where to go and what to explore locally."
+    },
+    {
+      "id": "about_us",
+      "patterns": [
+        "about us",
+        "who runs city hang around",
+        "who created this website",
+        "company behind city hang around",
+        "who are you"
+      ],
+      "tags": ["about", "company"],
+      "answer": "CityHangAround is built to make local exploration easier by organizing city places, hangout spots, and attractions in one place. The goal is to provide useful and accessible information for people looking to explore their city."
+    },
+    {
+      "id": "how_to_use_website",
+      "patterns": [
+        "how to use this website",
+        "how does city hang around work",
+        "how can i explore places",
+        "how to find locations",
+        "how to browse hangout spots"
+      ],
+      "tags": ["usage", "navigation"],
+      "answer": "You can use CityHangAround by browsing categories, searching for places, or exploring city-specific listings. Simply open a category or listing to view details about locations and hangout spots."
+    },
+    {
+      "id": "search_places",
+      "patterns": [
+        "how to search places",
+        "find places in my city",
+        "search for hangout spots",
+        "where can i search locations",
+        "how to look for places"
+      ],
+      "tags": ["search", "places"],
+      "answer": "Use the search or browsing features on the website to find places based on city, category, or interest. Listings provide information to help you decide where to go."
+    },
+    {
+      "id": "view_place_details",
+      "patterns": [
+        "how to view place details",
+        "see details of a location",
+        "open place information",
+        "view hangout information"
+      ],
+      "tags": ["places", "details"],
+      "answer": "Click on any place or listing to view its details. Each listing provides information relevant to that location to help users understand what the place offers."
+    },
+    {
+      "id": "account_required",
+      "patterns": [
+        "do i need an account",
+        "is login required",
+        "can i use website without account",
+        "do i need to sign up"
+      ],
+      "tags": ["account", "access"],
+      "answer": "Most content on CityHangAround can be browsed without creating an account. Certain features may require login if account-based functionality is enabled."
+    },
+    {
+      "id": "create_account",
+      "patterns": [
+        "how to create account",
+        "sign up on website",
+        "register on city hang around",
+        "create new account"
+      ],
+      "tags": ["account", "registration"],
+      "answer": "If account registration is available, you can create an account by visiting the registration page and submitting the required details."
+    },
+    {
+      "id": "login_issue",
+      "patterns": [
+        "cannot login",
+        "login not working",
+        "unable to sign in",
+        "login problem"
+      ],
+      "tags": ["login", "error"],
+      "answer": "If you are facing login issues, ensure your credentials are correct. If the problem continues, try resetting your password or contacting support."
+    },
+    {
+      "id": "password_reset",
+      "patterns": [
+        "forgot password",
+        "reset my password",
+        "recover account password",
+        "password recovery"
+      ],
+      "tags": ["password", "security"],
+      "answer": "Use the password reset option on the login page to receive instructions for creating a new password."
+    },
+    {
+      "id": "mobile_support",
+      "patterns": [
+        "is website mobile friendly",
+        "does it work on phone",
+        "mobile version available",
+        "use city hang around on mobile"
+      ],
+      "tags": ["mobile", "compatibility"],
+      "answer": "CityHangAround is designed to be responsive and can be accessed on mobile devices using a modern web browser."
+    },
+    {
+      "id": "browser_support",
+      "patterns": [
+        "supported browsers",
+        "which browser should i use",
+        "browser compatibility",
+        "best browser for website"
+      ],
+      "tags": ["browser", "technical"],
+      "answer": "The website works best on modern browsers such as Chrome, Firefox, Edge, and Safari."
+    },
+    {
+      "id": "page_loading_issue",
+      "patterns": [
+        "website not loading",
+        "page not opening",
+        "site loading slow",
+        "page stuck"
+      ],
+      "tags": ["performance", "error"],
+      "answer": "If pages are not loading properly, refresh the page, check your internet connection, or try opening the website in another browser."
+    },
+    {
+      "id": "content_accuracy",
+      "patterns": [
+        "is information accurate",
+        "are place details correct",
+        "how reliable is the data",
+        "accuracy of listings"
+      ],
+      "tags": ["content", "trust"],
+      "answer": "CityHangAround aims to provide accurate and useful information, but details may change over time. Users are encouraged to verify information directly with the place if needed."
+    },
+    {
+      "id": "contact_support",
+      "patterns": [
+        "how to contact support",
+        "contact city hang around",
+        "how to get help",
+        "support email"
+      ],
+      "tags": ["contact", "support"],
+      "answer": "You can reach out using the Contact Us page available on the website for any questions or support requests."
+    },
+    {
+      "id": "report_issue",
+      "patterns": [
+        "report a problem",
+        "report incorrect information",
+        "report website issue",
+        "how to report error"
+      ],
+      "tags": ["report", "issue"],
+      "answer": "If you notice incorrect information or technical issues, use the contact form to report the problem so it can be reviewed."
+    },
+    {
+      "id": "future_updates",
+      "patterns": [
+        "future features",
+        "upcoming updates",
+        "new features coming",
+        "website updates"
+      ],
+      "tags": ["updates", "features"],
+      "answer": "CityHangAround may introduce new features and improvements over time to enhance user experience and expand available content."
+    },
+    {
+      "id": "add_business",
+      "patterns": [
+        "how to add business",
+        "add my business on website",
+        "how can i add my shop",
+        "submit business listing",
+        "add place to city hang around"
+      ],
+      "tags": ["business", "listing", "add"],
+      "answer": "To add a business or place, look for an option related to adding or submitting a listing on the website. Fill in the required business details and submit the form for review if applicable."
+    },
+    {
+      "id": "list_business",
+      "patterns": [
+        "how to list my business",
+        "business listing process",
+        "list my shop on city hang around",
+        "how to get my business listed"
+      ],
+      "tags": ["business", "listing"],
+      "answer": "Businesses can be listed by submitting their information through the listing or submission section of the website. Once submitted, the listing may be reviewed before being published."
+    },
+    {
+      "id": "upload_business_details",
+      "patterns": [
+        "how to upload business details",
+        "upload shop information",
+        "add business information",
+        "submit place details"
+      ],
+      "tags": ["business", "upload"],
+      "answer": "When adding a business, you will be asked to provide details such as name, category, location, and description. Make sure the information is accurate before submitting."
+    },
+    {
+      "id": "upload_images",
+      "patterns": [
+        "how to upload images",
+        "upload business photos",
+        "add images to listing",
+        "upload place pictures"
+      ],
+      "tags": ["upload", "images"],
+      "answer": "If image upload is available, you can add photos while submitting or editing a listing. Ensure images meet the supported format and size requirements."
+    },
+    {
+      "id": "edit_business_listing",
+      "patterns": [
+        "edit business listing",
+        "update business information",
+        "change listing details",
+        "modify my business listing"
+      ],
+      "tags": ["business", "edit"],
+      "answer": "To edit a business listing, access the listing management section if available and update the required details. Changes may be reviewed before being applied."
+    },
+    {
+      "id": "business_approval",
+      "patterns": [
+        "business approval process",
+        "how long does listing approval take",
+        "listing review process",
+        "is business listing approved automatically"
+      ],
+      "tags": ["business", "approval"],
+      "answer": "Submitted business listings may go through a review process to ensure accuracy and relevance. Approval time can vary depending on verification requirements."
+    },
+    {
+      "id": "remove_business_listing",
+      "patterns": [
+        "remove my business listing",
+        "delete business from website",
+        "how to remove shop listing",
+        "unlist my business"
+      ],
+      "tags": ["business", "remove"],
+      "answer": "If you need to remove a business listing, contact support or use the listing management option if available to request removal."
+    },
+    {
+      "id": "who_can_add_business",
+      "patterns": [
+        "who can add business",
+        "can anyone list a business",
+        "eligibility for business listing",
+        "who is allowed to add listings"
+      ],
+      "tags": ["business", "access"],
+      "answer": "Business listings are typically added by business owners or authorized representatives. Some listings may require verification before being published."
+    },
+    {
+      "id": "cost_for_listing",
+      "patterns": [
+        "is business listing free",
+        "cost to list business",
+        "business listing charges",
+        "do i have to pay to add business"
+      ],
+      "tags": ["business", "pricing"],
+      "answer": "Whether business listings are free or paid depends on the website's listing policy. Please check the website for any pricing or promotional details."
+    },
+    {
+      "id": "business_visibility",
+      "patterns": [
+        "how long until my business appears",
+        "when will my listing be visible",
+        "business listing not showing",
+        "listing visibility time"
+      ],
+      "tags": ["business", "visibility"],
+      "answer": "After submission and approval, business listings should appear on the website. If a listing is not visible, it may still be under review."
+    },
+    {
+      "id": "claim_business",
+      "patterns": [
+        "how to claim my business",
+        "claim business listing",
+        "if my business is already listed",
+        "how do i take ownership of my business page"
+      ],
+      "tags": ["business", "claim"],
+      "answer": "If your business is already listed, you can claim it by verifying ownership through the website's business claim process, which may involve providing business proof or contact details."
+    },
+    {
+      "id": "search_by_city",
+      "patterns": [
+        "how to find places in my city",
+        "search by city",
+        "browse city listings",
+        "choose a city on website"
+      ],
+      "tags": ["search", "location"],
+      "answer": "Use the city selector or search by city name to explore local listings, events, services, restaurants, and groups specific to that city."
+    },
+    {
+      "id": "browse_categories",
+      "patterns": [
+        "how to browse restaurants",
+        "find hotels",
+        "services in my area",
+        "categories of places"
+      ],
+      "tags": ["navigation", "categories"],
+      "answer": "Navigate the website's category menu to browse listings by type such as restaurants, hotels, services, shopping, and more within your chosen city."
+    },
+    {
+      "id": "view_events",
+      "patterns": [
+        "how to find events",
+        "local events",
+        "what events are available",
+        "upcoming events near me"
+      ],
+      "tags": ["events", "explore"],
+      "answer": "Visit the Events page to view current and upcoming local events such as concerts, fairs, workshops, and community meetups."
+    },
+    {
+      "id": "join_groups",
+      "patterns": [
+        "how to join groups",
+        "what are community groups",
+        "social groups on website",
+        "how to participate in community"
+      ],
+      "tags": ["community", "groups"],
+      "answer": "Use the Groups section to find and join community groups based on interests like health, hobbies, or local discussions. You can engage and share content with group members."
+    },
+    {
+      "id": "social_login",
+      "patterns": [
+        "login with google",
+        "facebook login",
+        "sign in with social account",
+        "login options"
+      ],
+      "tags": ["login", "account"],
+      "answer": "CityHangAround allows login using email/password or social accounts such as Google or Facebook for quick access."
+    },
+    {
+      "id": "privacy_policy",
+      "patterns": [
+        "privacy policy",
+        "how is my data used",
+        "what information is collected",
+        "data protection"
+      ],
+      "tags": ["privacy", "data"],
+      "answer": "The site collects user data such as account details, usage information, and business listing information to provide and improve services. You can review the full privacy policy on the dedicated policy page."
+    },
+    {
+      "id": "save_places",
+      "patterns": [
+        "save places",
+        "bookmark a place",
+        "add place to favorites",
+        "save hangout spot",
+        "where are my saved places"
+      ],
+      "tags": ["user", "saved", "favorites"],
+      "answer": "Logged-in users can save or bookmark places to easily access them later. Saved places are available in the user account section for quick reference."
+    },
+    {
+      "id": "follow_business",
+      "patterns": [
+        "follow a business",
+        "follow a place",
+        "get updates from business",
+        "how to follow listings"
+      ],
+      "tags": ["follow", "business"],
+      "answer": "Users can follow businesses or places to stay updated with changes, posts, or announcements related to those listings."
+    },
+    {
+      "id": "user_profile",
+      "patterns": [
+        "what is my profile for",
+        "why do i need a profile",
+        "user profile purpose",
+        "profile on city hang around"
+      ],
+      "tags": ["profile", "user"],
+      "answer": "Your user profile helps personalize your experience by storing saved places, group participation, business interactions, and account activity."
+    },
+    {
+      "id": "comment_on_places",
+      "patterns": [
+        "how to comment",
+        "add comment on place",
+        "post a comment",
+        "leave feedback"
+      ],
+      "tags": ["comment", "interaction"],
+      "answer": "Logged-in users can comment on listings, posts, or discussions where commenting is enabled to share opinions or feedback."
+    },
+    {
+      "id": "attend_events",
+      "patterns": [
+        "how to attend events",
+        "join an event",
+        "register for events",
+        "event participation"
+      ],
+      "tags": ["events", "user"],
+      "answer": "Users can view and participate in listed events. Some events may require confirmation or registration through the event page."
+    },
+    {
+      "id": "add_event",
+      "patterns": [
+        "how to add event",
+        "post an event",
+        "create new event",
+        "submit local event"
+      ],
+      "tags": ["events", "create"],
+      "answer": "If enabled, users or businesses can add events by submitting event details through the events section. Events may require review before being published."
+    },
+    {
+      "id": "notifications",
+      "patterns": [
+        "notifications",
+        "how do i get updates",
+        "alerts from website",
+        "activity notifications"
+      ],
+      "tags": ["notifications", "updates"],
+      "answer": "Users may receive notifications related to saved places, followed businesses, group activity, or events."
+    },
+    {
+      "id": "report_content",
+      "patterns": [
+        "report content",
+        "report business",
+        "report inappropriate post",
+        "flag content"
+      ],
+      "tags": ["report", "moderation"],
+      "answer": "If you encounter incorrect or inappropriate content, you can report it using available reporting options or by contacting support."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+streamlit
+pandas
+numpy
+joblib
+scikit-learn
+requests
+python-dotenv
+fastapi
+uvicorn
+openpyxl
+python-multipart
