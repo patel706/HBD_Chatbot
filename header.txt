@@ -1,0 +1,1 @@
+id,name,address,website,phone_number,reviews_count,reviews_avg,category,subcategory,city,state,area,created_at
