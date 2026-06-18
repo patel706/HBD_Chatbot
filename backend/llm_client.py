@@ -106,7 +106,7 @@ def get_smart_suggestions(text, lang="en", context="QUERY"):
     )
     
     # Use a small, very fast model for low-latency suggestions
-    model = "google/gemini-2.0-flash-lite-001" 
+    model = "google/gemini-2.5-flash-lite" 
     
     try:
         msg = call_llm([{"role": "user", "content": prompt}], model)

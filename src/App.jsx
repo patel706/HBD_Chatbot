@@ -4,6 +4,27 @@ import Launcher from './components/Launcher'
 
 export default function App() {
   const [isOpen, setIsOpen] = useState(false)
+  const [searchVal, setSearchVal] = useState('')
+  const [chatQuery, setChatQuery] = useState('')
+  const [chatAction, setChatAction] = useState('')
+
+  const handleSearchSubmit = () => {
+    if (searchVal.trim()) {
+      setChatQuery(searchVal.trim())
+      setIsOpen(true)
+      setSearchVal('')
+    }
+  }
+
+  const handleTrendingClick = (city) => {
+    setChatQuery(city)
+    setIsOpen(true)
+  }
+
+  const handleAddBusinessClick = () => {
+    setChatAction('add_new_business')
+    setIsOpen(true)
+  }
 
   return (
     <div className="relative min-h-screen bg-white">
@@ -22,7 +43,10 @@ export default function App() {
           <a href="#" className="hover:text-indigo-600 transition-colors">Trending</a>
           <a href="#" className="hover:text-indigo-600 transition-colors">About</a>
         </nav>
-        <button className="bg-indigo-600 text-white px-5 py-2.5 rounded-full font-bold text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-0.5" onClick={() => setIsOpen(true)}>
+        <button 
+          className="bg-indigo-600 text-white px-5 py-2.5 rounded-full font-bold text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-0.5" 
+          onClick={handleAddBusinessClick}
+        >
           Add Business
         </button>
       </header>
@@ -46,9 +70,15 @@ export default function App() {
               <input
                 type="text"
                 placeholder="Ex. Best Pizza, Ayurvedic Center, Gym..."
+                value={searchVal}
+                onChange={(e) => setSearchVal(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearchSubmit()}
                 className="w-full py-4 text-lg font-medium text-gray-800 focus:outline-none placeholder:text-gray-300"
               />
-              <button className="bg-indigo-600 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">
+              <button 
+                onClick={handleSearchSubmit}
+                className="bg-indigo-600 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+              >
                 Search
               </button>
             </div>
@@ -56,10 +86,10 @@ export default function App() {
 
           <div className="pt-8 flex flex-wrap justify-center gap-3 text-xs font-bold uppercase tracking-widest text-gray-400">
             <span>Trending:</span>
-            <span className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Pune</span>
-            <span className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Jaipur</span>
-            <span className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Indore</span>
-            <span className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Delhi</span>
+            <span onClick={() => handleTrendingClick('Pune')} className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Pune</span>
+            <span onClick={() => handleTrendingClick('Jaipur')} className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Jaipur</span>
+            <span onClick={() => handleTrendingClick('Indore')} className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Indore</span>
+            <span onClick={() => handleTrendingClick('Delhi')} className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full cursor-pointer hover:bg-indigo-100">Delhi</span>
           </div>
         </div>
       </main>
@@ -80,7 +110,13 @@ export default function App() {
               : 'scale-95 opacity-0 pointer-events-none'
             } w-[400px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[80vh] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200 flex flex-col`}
         >
-          <ChatWidget onClose={() => setIsOpen(false)} />
+          <ChatWidget 
+            onClose={() => setIsOpen(false)} 
+            initialQuery={chatQuery} 
+            onClearInitialQuery={() => setChatQuery('')}
+            initialAction={chatAction}
+            onClearInitialAction={() => setChatAction('')}
+          />
         </div>
 
         <Launcher isOpen={isOpen} onClick={() => setIsOpen(!isOpen)} />

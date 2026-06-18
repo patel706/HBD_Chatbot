@@ -72,7 +72,7 @@ const getAddDealSteps = (trans) => [
 /* =========================
    MAIN COMPONENT
  ========================== */
-const ChatWidget = ({ onClose }) => {
+const ChatWidget = ({ onClose, initialQuery, onClearInitialQuery, initialAction, onClearInitialAction }) => {
   const [inputText, setInputText] = useState('')
   const [flowMode, setFlowMode] = useState('QUERY') // QUERY | UPDATE_VALUE | SEARCH_NAME | SEARCH_ADDR | ADD_WIZARD
   const [quickActionsView, setQuickActionsView] = useState('welcome_screen')
@@ -136,6 +136,47 @@ const ChatWidget = ({ onClose }) => {
     }
   }, [isLoggedIn, session, currentSessionId])
   // ─────────────────────────────────────────────────────────────────────────
+
+  const [backendHealth, setBackendHealth] = useState('checking')
+
+  const checkHealth = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`)
+      if (response.ok) {
+        setBackendHealth('Connected')
+      } else {
+        setBackendHealth('Offline')
+      }
+    } catch (error) {
+      setBackendHealth('Offline')
+    }
+  }, [])
+
+  useEffect(() => {
+    checkHealth()
+    const interval = setInterval(checkHealth, 10000)
+    return () => clearInterval(interval)
+  }, [checkHealth])
+
+  // Process initialQuery
+  useEffect(() => {
+    if (initialQuery) {
+      handleSend(null, initialQuery)
+      if (onClearInitialQuery) {
+        onClearInitialQuery()
+      }
+    }
+  }, [initialQuery, onClearInitialQuery])
+
+  // Process initialAction
+  useEffect(() => {
+    if (initialAction) {
+      handleAction(initialAction)
+      if (onClearInitialAction) {
+        onClearInitialAction()
+      }
+    }
+  }, [initialAction, onClearInitialAction])
 
   // ── CHAT MEMORY: helpers ──────────────────────────────────────────────────
   const getUserId = () => session.phone || session.email || null
@@ -1094,9 +1135,11 @@ const ChatWidget = ({ onClose }) => {
           <div className="w-8 h-8 bg-[#4F46E5] rounded-lg flex items-center justify-center text-white font-bold">C</div>
           <div>
             <h2 className="text-sm font-bold text-gray-800">CityHangAround</h2>
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-[10px] text-gray-500 font-medium">{UI_TRANSLATIONS[currentLanguage || 'en']?.assistant_online || UI_TRANSLATIONS.en.assistant_online}</span>
+            <div className="flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${backendHealth === 'Connected' ? 'bg-green-500 animate-pulse' : backendHealth === 'Offline' ? 'bg-red-500' : 'bg-yellow-500'}`}></span>
+              <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">
+                {backendHealth === 'Connected' ? 'Connected' : backendHealth === 'Offline' ? 'Offline' : 'Checking...'}
+              </span>
             </div>
           </div>
         </div>
