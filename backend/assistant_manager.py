@@ -127,6 +127,36 @@ def get_guidance(intent: str, query: str, language: str = "en") -> str:
         }
         return fallbacks.get(language, fallbacks["en"])
 
+def clean_history_message(role: str, content: str) -> str:
+    """Cleans up previous assistant responses (like database JSONs) into simple human-readable context summaries for LLM history."""
+    if role != "assistant":
+        return content
+    content_str = str(content).strip()
+    if not (content_str.startswith("{") or content_str.startswith("[")):
+        return content
+    try:
+        data = json.loads(content_str)
+        if isinstance(data, dict):
+            msg_type = data.get("type", "text")
+            if msg_type == "database":
+                bizs = data.get("data", []) or data.get("content", [])
+                intro = data.get("intro", "")
+                names = [b.get("business_name", b.get("name", "Unknown")) for b in bizs]
+                return f"{intro}\n[Shown businesses: {', '.join(names)}]"
+            elif msg_type == "suggestions":
+                intro = data.get("intro", "")
+                suggs = [s.get("title", s.get("action", "")) for s in data.get("content", [])]
+                return f"{intro}\n[Suggestions shown: {', '.join(suggs)}]"
+            elif msg_type in ["manage_products", "manage_deals"]:
+                intro = data.get("intro", "")
+                items = [i.get("name", i.get("title", "")) for i in data.get("content", [])]
+                return f"{intro}\n[Items shown: {', '.join(items)}]"
+            else:
+                return data.get("content", data.get("data", str(content)))
+    except Exception:
+        pass
+    return content
+
 def get_assistant_response(query: str, context: str, language: str = "en", history: list = None) -> str:
     """Generates a secure, concise response using provided context and optional conversation history."""
     messages = [
@@ -140,7 +170,8 @@ def get_assistant_response(query: str, context: str, language: str = "en", histo
             # Normalize role: "assistant" -> "assistant", anything else -> "user"
             if role not in ("user", "assistant"):
                 role = "user"
-            messages.append({"role": role, "content": h.get("content", "")})
+            cleaned_content = clean_history_message(role, h.get("content", ""))
+            messages.append({"role": role, "content": cleaned_content})
     messages.append({"role": "user", "content": query})
     try:
         response = call_llm(messages=messages, model=MODEL)
@@ -155,9 +186,10 @@ def get_assistant_response(query: str, context: str, language: str = "en", histo
             return emsg[language] + f" ({e})"
         
         try:
-             prompt = f"Translate to language code {language}: 'I'm sorry, I'm having trouble processing that right now.'"
-             res = call_llm([{"role": "user", "content": prompt}], model=MODEL)
-             return res.get("content", "").strip()
+            prompt = f"Translate to language code {language}: 'I'm sorry, I'm having trouble processing that right now.'"
+            res = call_llm([{"role": "user", "content": prompt}], model=MODEL)
+            return res.get("content", "").strip()
         except:
-             return emsg["en"]
+            return emsg["en"]
+
 

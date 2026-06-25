@@ -35,12 +35,16 @@ export function useChatWizards({
   addThinking,
   removeThinking,
   setSession,
-  setQuickActionsView
+  setQuickActionsView,
+  flowMode,
+  setFlowMode,
+  wizardStep,
+  setWizardStep,
+  wizardData,
+  setWizardData,
+  pendingUpdateField,
+  setPendingUpdateField
 }) {
-  const [flowMode, setFlowMode] = useState('QUERY'); // QUERY | UPDATE_VALUE | SEARCH_NAME | SEARCH_ADDR | ADD_WIZARD | ADD_PRODUCT | ADD_DEAL
-  const [wizardStep, setWizardStep] = useState(0);
-  const [wizardData, setWizardData] = useState({});
-  const [pendingUpdateField, setPendingUpdateField] = useState(null);
 
   const formatFieldName = (field) =>
     field

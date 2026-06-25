@@ -76,6 +76,9 @@ export const api = {
   deleteDeal: (id) =>
     fetch(`/api/deals/${id}`, { method: 'DELETE' }).then(handleResponse),
 
+  deleteBusiness: (id) =>
+    fetch(`/api/business/${id}`, { method: 'DELETE' }).then(handleResponse),
+
   // ── CHAT SESSIONS ─────────────────────────────────────────────────────
   createChatSession: (userId) => fetch('/api/chats', {
     method: 'POST',
@@ -94,9 +97,23 @@ export const api = {
       method: 'DELETE'
     }).then(handleResponse),
 
+  renameChatSession: (sessionId, title, userId) =>
+    fetch(`/api/chats/${sessionId}?user_id=${encodeURIComponent(userId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    }).then(handleResponse),
+
+  pinChatSession: (sessionId, isPinned, userId) =>
+    fetch(`/api/chats/${sessionId}/pin?user_id=${encodeURIComponent(userId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_pinned: isPinned })
+    }).then(handleResponse),
+
   // ── HOME / DISCOVERY ─────────────────────────────────────────────────
-  getCategories: () =>
-    fetch('/api/categories').then(handleResponse),
+  getCategories: (hierarchy = false) =>
+    fetch(`/api/categories?hierarchy=${hierarchy}`).then(handleResponse),
 
   getTrending: () =>
     fetch('/api/trending').then(handleResponse),

@@ -23,6 +23,8 @@ export default function Sidebar({
   onNewChat,
   onLoadSession,
   onDeleteSession,
+  onRenameSession,
+  onPinSession,
   onLoadChatList,
   // Theme
   isDark,
@@ -176,14 +178,14 @@ export default function Sidebar({
         {/* ─── NAV LINKS ────────────────────────────── */}
         <div style={{ padding: '0 10px 8px', flexShrink: 0 }}>
           <NavItem to="/" icon={<Home size={16} />} label="Home" collapsed={collapsed} />
-          <NavItem to="/chat" icon={<MessageSquare size={16} />} label="Chat" collapsed={collapsed} />
+          <NavItem to="/chat" icon={<img src="/avatar.png" alt="Chat Assistant" style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-subtle)' }} />} label="Chat" collapsed={collapsed} />
           <NavItem to="/categories" icon={<Grid size={16} />} label="Categories" collapsed={collapsed} />
           <NavItem to="/analytics" icon={<BarChart2 size={16} />} label="Analytics" collapsed={collapsed} />
           <NavItem to="/about" icon={<Info size={16} />} label="About" collapsed={collapsed} />
         </div>
 
-        {/* ─── SEARCH (only when expanded) ────────── */}
-        {isLoggedIn && !collapsed && (
+        {/* ─── SEARCH (always when expanded) ────────── */}
+        {!collapsed && (
           <div style={{ padding: '0 10px 8px', flexShrink: 0 }}>
             <div style={{
               position: 'relative',
@@ -220,7 +222,7 @@ export default function Sidebar({
         )}
 
         {/* ─── CHAT HISTORY ─────────────────────────── */}
-        {isLoggedIn && (
+        {true && (
           <>
             {!collapsed && (
               <div style={{
@@ -244,8 +246,10 @@ export default function Sidebar({
                 sessions={filteredSessions}
                 currentSessionId={currentSessionId}
                 loading={chatListLoading}
-                onLoad={(id) => { onLoadSession(id); setMobileOpen(false); }}
+                onLoad={(id) => { onLoadSession(id); navigate('/chat'); setMobileOpen(false); }}
                 onDelete={onDeleteSession}
+                onRename={onRenameSession}
+                onPin={onPinSession}
                 collapsed={collapsed}
               />
             </div>

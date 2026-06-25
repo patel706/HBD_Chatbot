@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, RefreshCw, LogIn, MessageSquare, AlertCircle, X, ArrowRight,
   TrendingUp, ChevronRight, ChevronLeft, PlusCircle, MapPin, Type, Trash2,
@@ -89,6 +89,100 @@ function CopyButton({ text }) {
   );
 }
 
+// Speaker / TTS button component
+function SpeakerButton({ text, language }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const utteranceRef = useRef(null);
+
+  const handleSpeak = (e) => {
+    e.stopPropagation();
+    
+    if (isPlaying) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+      return;
+    }
+
+    // Stop any current speech
+    window.speechSynthesis.cancel();
+
+    // Clean text of markdown or JSON tags
+    let cleanText = String(text)
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // remove bold asterisks
+      .replace(/`([^`]+)`/g, '$1') // remove code ticks
+      .replace(/[🐝👋🚨⭐🔍📍📞🌐🎟️⏭️⏮️✨🔥]/g, ''); // remove emojis for smoother reading
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utteranceRef.current = utterance;
+
+    // Resolve voice based on language
+    const voices = window.speechSynthesis.getVoices();
+    let langCode = 'en-US';
+    if (language === 'hi') langCode = 'hi-IN';
+    else if (language === 'te') langCode = 'te-IN';
+    else if (language === 'gu') langCode = 'gu-IN';
+    
+    utterance.lang = langCode;
+
+    // Try to find a matching voice
+    const voice = voices.find(v => v.lang.startsWith(langCode) || v.lang.includes(langCode));
+    if (voice) utterance.voice = voice;
+
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+
+    setIsPlaying(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (isPlaying) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [isPlaying]);
+
+  return (
+    <button
+      onClick={handleSpeak}
+      title={isPlaying ? "Stop" : "Listen"}
+      style={{
+        padding: '2px 6px',
+        borderRadius: 6,
+        border: '1px solid var(--border-subtle)',
+        background: 'var(--bg-surface-2)',
+        cursor: 'pointer',
+        color: isPlaying ? 'var(--color-primary)' : 'var(--text-muted)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        fontSize: '0.6875rem',
+        fontWeight: 600,
+        transition: 'all 150ms ease',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.color = 'var(--color-primary)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = isPlaying ? 'var(--color-primary)' : 'var(--text-muted)'; }}
+    >
+      {isPlaying ? (
+        <>
+          <div className="audio-wave" style={{ display: 'flex', alignItems: 'center', gap: 1.5, height: 8 }}>
+            <span style={{ width: 1.5, height: '100%', background: 'var(--color-primary)', borderRadius: 1, animation: 'wave 0.6s infinite alternate' }} />
+            <span style={{ width: 1.5, height: '60%', background: 'var(--color-primary)', borderRadius: 1, animation: 'wave 0.6s infinite alternate 0.2s' }} />
+            <span style={{ width: 1.5, height: '80%', background: 'var(--color-primary)', borderRadius: 1, animation: 'wave 0.6s infinite alternate 0.4s' }} />
+          </div>
+          Speaking...
+        </>
+      ) : (
+        <>
+          <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          Listen
+        </>
+      )}
+    </button>
+  );
+}
+
 // Star rating renderer
 function StarRating({ rating = 0, max = 5 }) {
   return (
@@ -108,16 +202,68 @@ function StarRating({ rating = 0, max = 5 }) {
   );
 }
 
+// Dynamic gradient helper based on business name string
+function getAvatarStyle(name) {
+  const colors = [
+    ['#4f46e5', '#7c3aed'], // Indigo/Violet
+    ['#3b82f6', '#1d4ed8'], // Blue
+    ['#059669', '#047857'], // Emerald
+    ['#db2777', '#be185d'], // Pink
+    ['#ea580c', '#c2410c'], // Orange
+    ['#06b6d4', '#0891b2'], // Cyan
+  ];
+  const hash = String(name).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const pair = colors[hash % colors.length];
+  return {
+    background: `linear-gradient(135deg, ${pair[0]}, ${pair[1]})`,
+    boxShadow: `0 4px 10px ${pair[0]}33`
+  };
+}
+
 // ─────────────────────────────────────────────────────────
 // BUSINESS CARD
 // ─────────────────────────────────────────────────────────
-function BusinessCard({ biz }) {
+function BusinessCard({ biz, onAction, isLoggedIn, session }) {
+  const isOwner = isLoggedIn && session?.type === 'BUSINESS' && Number(session?.businessId) === Number(biz.global_business_id);
+  const avatarStyle = getAvatarStyle(biz.business_name || 'B');
+  const firstLetter = String(biz.business_name || 'B').trim().charAt(0).toUpperCase();
+
   return (
-    <div className="biz-card" style={{ marginBottom: 8 }}>
-      <div className="biz-card-header">
+    <div className="biz-card" style={{
+      marginBottom: 12,
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border-subtle)',
+      borderRadius: 'var(--radius-lg)',
+      overflow: 'hidden',
+      boxShadow: 'var(--shadow-sm)',
+      transition: 'all 200ms ease',
+      display: 'flex',
+      flexDirection: 'column'
+    }}
+    onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+    onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+    >
+      <div style={{ display: 'flex', gap: 12, padding: 14 }}>
+        {/* SVG Letter Avatar */}
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 800,
+          fontSize: '1.25rem',
+          flexShrink: 0,
+          ...avatarStyle
+        }}>
+          {firstLetter}
+        </div>
+
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span className="badge badge-primary" style={{ fontSize: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+            <span className="badge badge-primary" style={{ fontSize: '0.625rem', fontWeight: 700, padding: '2px 8px' }}>
               {biz.business_category || 'Business'}
             </span>
             {biz.city && (
@@ -126,45 +272,114 @@ function BusinessCard({ biz }) {
               </span>
             )}
           </div>
-          <h4 className="biz-card-name">{biz.business_name}</h4>
+          <h4 className="biz-card-name" style={{ fontSize: '0.9375rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)', lineHeight: 1.3 }}>
+            {biz.business_name}
+          </h4>
+          <div style={{ marginTop: 4 }}>
+            <StarRating rating={biz.ratings} />
+          </div>
         </div>
-        <StarRating rating={biz.ratings} />
       </div>
 
-      <div className="biz-card-meta">
+      <div className="biz-card-meta" style={{ padding: '0 14px 12px', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {biz.address && (
-          <div className="biz-card-meta-row">
-            <MapPin size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            <span>{biz.area ? `${biz.area}, ` : ''}{biz.address}</span>
-          </div>
-        )}
-        {biz.phone_number && (
-          <div className="biz-card-meta-row">
-            <Phone size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            <a href={`tel:${biz.phone_number}`} style={{ color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none', fontSize: '0.75rem' }}>
-              {biz.phone_number}
-            </a>
-          </div>
-        )}
-        {biz.website_url && (
-          <div className="biz-card-meta-row">
-            <Globe size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            <a
-              href={biz.website_url.startsWith('http') ? biz.website_url : `https://${biz.website_url}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 3 }}
-            >
-              Website <ExternalLink size={9} />
-            </a>
+          <div className="biz-card-meta-row" style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <MapPin size={11} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }} />
+            <span style={{ lineHeight: 1.3 }}>{biz.area ? `${biz.area}, ` : ''}{biz.address}</span>
           </div>
         )}
         {biz.reviews_count > 0 && (
-          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: 2 }}>
+          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', paddingLeft: 17 }}>
             Based on {biz.reviews_count} review{biz.reviews_count !== 1 ? 's' : ''}
           </div>
         )}
       </div>
+
+      {/* Premium CTA Action Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        borderTop: '1px solid var(--border-subtle)',
+        background: 'var(--bg-surface-2)',
+        padding: 4,
+        gap: 4
+      }}>
+        {biz.phone_number ? (
+          <a href={`tel:${biz.phone_number}`} className="biz-card-cta-btn" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+            padding: '6px 8px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700,
+            color: 'var(--color-primary)', textDecoration: 'none', transition: 'all 150ms ease'
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-primary-light)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Phone size={11} /> Call
+          </a>
+        ) : (
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.5 }}>
+            <Phone size={11} style={{ marginRight: 4 }} /> No Phone
+          </span>
+        )}
+
+        {biz.website_url ? (
+          <a href={biz.website_url.startsWith('http') ? biz.website_url : `https://${biz.website_url}`}
+             target="_blank" rel="noopener noreferrer" className="biz-card-cta-btn" style={{
+               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+               padding: '6px 8px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700,
+               color: 'var(--color-primary)', textDecoration: 'none', transition: 'all 150ms ease'
+             }}
+             onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-primary-light)'; }}
+             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Globe size={11} /> Website
+          </a>
+        ) : (
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.5 }}>
+            <Globe size={11} style={{ marginRight: 4 }} /> No Web
+          </span>
+        )}
+
+        <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz.business_name + ' ' + (biz.address || '') + ' ' + (biz.city || ''))}`}
+           target="_blank" rel="noopener noreferrer" className="biz-card-cta-btn" style={{
+             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+             padding: '6px 8px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700,
+             color: 'var(--color-primary)', textDecoration: 'none', transition: 'all 150ms ease'
+           }}
+           onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-primary-light)'; }}
+           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+          Directions
+        </a>
+      </div>
+
+      {isOwner && (
+        <div style={{ padding: '0 14px 10px', background: 'var(--bg-surface-2)' }}>
+          <button
+            onClick={() => onAction('delete_business', biz.global_business_id)}
+            style={{
+              width: '100%',
+              padding: '5px 10px',
+              borderRadius: 6,
+              border: '1px solid #fecaca',
+              background: '#fef2f2',
+              color: '#dc2626',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              transition: 'all 150ms ease'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#f87171'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fecaca'; }}
+          >
+            <Trash2 size={11} /> Delete Listing
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -172,7 +387,7 @@ function BusinessCard({ biz }) {
 // ─────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────
-const MessageItem = ({ message, onAction, isLoggedIn, session }) => {
+const MessageItem = ({ message, onAction, isLoggedIn, session, language = 'en' }) => {
   const isBot = message.role === 'bot';
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [activeImage, setActiveImage] = useState(null);
@@ -327,7 +542,7 @@ const MessageItem = ({ message, onAction, isLoggedIn, session }) => {
           {suggestions.map((item, idx) => (
             <div
               key={idx}
-              onClick={() => onAction('update_specific', item.field)}
+              onClick={() => onAction(item.action || 'update_specific', item.field)}
               style={{
                 background: 'var(--bg-surface)', border: `1px solid ${item.is_missing ? '#fed7aa' : 'var(--border-subtle)'}`,
                 borderRadius: 'var(--radius-lg)', padding: '12px 14px',
@@ -398,11 +613,11 @@ const MessageItem = ({ message, onAction, isLoggedIn, session }) => {
           </div>
         )}
         {items.map((biz, idx) => (
-          <BusinessCard key={biz.global_business_id || idx} biz={biz} />
+          <BusinessCard key={biz.global_business_id || idx} biz={biz} onAction={onAction} isLoggedIn={isLoggedIn} session={session} />
         ))}
 
-        {/* Inline suggestions for missing fields */}
-        {message.suggestions && message.suggestions.length > 0 && (
+        {/* Inline suggestions for missing fields (profile updates) */}
+        {message.suggestions && message.suggestions.length > 0 && message.suggestions.some(s => s.field) && (
           <div style={{
             background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 'var(--radius-lg)',
             padding: 12, marginTop: 8,
@@ -419,10 +634,10 @@ const MessageItem = ({ message, onAction, isLoggedIn, session }) => {
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {message.suggestions.map((s, idx) => (
+              {message.suggestions.filter(s => s.field).map((s, idx) => (
                 <button
                   key={idx}
-                  onClick={() => onAction('update_specific', s.field)}
+                  onClick={() => onAction(s.action || 'update_specific', s.field)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '9px 12px', background: 'white', border: '1px solid #fde68a',
@@ -440,6 +655,56 @@ const MessageItem = ({ message, onAction, isLoggedIn, session }) => {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Sleek, wrapping horizontal row of ChatGPT-style suggestion chips (for pagination/filters) */}
+        {message.suggestions && message.suggestions.length > 0 && message.suggestions.some(s => s.query) && (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginTop: 12,
+            justifyContent: 'flex-start'
+          }}>
+            {message.suggestions.filter(s => s.query).map((s, idx) => (
+              <button
+                key={idx}
+                onClick={() => onAction(s.action, s.query)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 14px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-full)',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  transition: 'all var(--transition-fast)',
+                  boxShadow: 'var(--shadow-sm)',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = 'var(--color-primary)';
+                  e.currentTarget.style.color = 'var(--color-primary)';
+                  e.currentTarget.style.background = 'var(--color-primary-light)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                  e.currentTarget.style.background = 'var(--bg-surface)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                }}
+              >
+                {s.title}
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -634,10 +899,11 @@ const MessageItem = ({ message, onAction, isLoggedIn, session }) => {
         <div className={isBot ? 'chat-bubble-bot' : 'chat-bubble-user'}>
           {isBot ? <MarkdownText text={content} /> : content}
         </div>
-        {/* Copy button for bot messages */}
+        {/* Actions row for bot messages (Copy & Speak) */}
         {isBot && content.length > 20 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <CopyButton text={content} />
+            <SpeakerButton text={content} language={language} />
           </div>
         )}
       </div>

@@ -13,26 +13,42 @@ import { api } from '../../services/api';
 import { useChatMemory } from '../../hooks/useChatMemory';
 import { useChatWizards, ADD_BIZ_STEPS, getAddProductSteps, getAddDealSteps } from '../../hooks/useChatWizards';
 
-const ChatArea = ({
-  // Sidebar integration
-  isLoggedIn, setIsLoggedIn,
-  session, setSession,
-  currentSessionId, setCurrentSessionId,
-  chatList, setChatList,
-  chatListLoading, setChatListLoading,
-  // Toast
-  toast,
-  // Initial query (from home page search)
-  initialQuery,
-  onClearInitialQuery,
-  initialAction,
-  onClearInitialAction,
-  // Floating widget support
-  isFloating = false,
-  onClose,
-}) => {
+const ChatArea = (props) => {
+  const {
+    // Sidebar integration
+    isLoggedIn, setIsLoggedIn,
+    session, setSession,
+    currentSessionId, setCurrentSessionId,
+    chatList, setChatList,
+    chatListLoading, setChatListLoading,
+    // Toast
+    toast,
+    // Initial query (from home page search)
+    initialQuery,
+    onClearInitialQuery,
+    initialAction,
+    onClearInitialAction,
+    // Floating widget support
+    isFloating = false,
+    onClose,
+
+    // Lifted memory states and handlers from props (originally from useChatMemory)
+    localMessages, setLocalMessages,
+    currentLanguage, setCurrentLanguage,
+    flowMode, setFlowMode,
+    wizardStep, setWizardStep,
+    wizardData, setWizardData,
+    pendingUpdateField, setPendingUpdateField,
+    getUserId,
+    startNewSession,
+    handleNewChat,
+    handleLoadSession,
+    handleDeleteSession,
+    handleRenameSession,
+    handlePinSession,
+  } = props;
+
   const [inputText, setInputText] = useState('');
-  const [currentLanguage, setCurrentLanguage] = useState('en');
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [resetConfirmCount, setResetConfirmCount] = useState(0);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -41,12 +57,10 @@ const ChatArea = ({
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [backendHealth, setBackendHealth] = useState('checking');
+  const [thinkingStatus, setThinkingStatus] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
 
-  const [localMessages, setLocalMessages] = useState([
-    { id: 'init', role: 'bot', type: 'text', content: UI_TRANSLATIONS.en.welcome }
-  ]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -62,27 +76,11 @@ const ChatArea = ({
   const wizards = useChatWizards({
     session, currentLanguage, setLocalMessages, addThinking, removeThinking,
     setSession, setQuickActionsView: () => {},
+    flowMode, setFlowMode,
+    wizardStep, setWizardStep,
+    wizardData, setWizardData,
+    pendingUpdateField, setPendingUpdateField,
   });
-
-  const memory = useChatMemory({
-    session, currentLanguage, setLocalMessages,
-    setFlowMode: wizards.setFlowMode,
-    setWizardStep: wizards.setWizardStep,
-    setWizardData: wizards.setWizardData,
-  });
-
-  const { flowMode, setFlowMode, wizardStep, setWizardStep, wizardData, setWizardData, pendingUpdateField, setPendingUpdateField } = wizards;
-  const {
-    currentSessionId: memSessionId, setCurrentSessionId: setMemSessionId,
-    chatList: memChatList, setChatList: setMemChatList,
-    chatListLoading: memLoading, setChatListLoading: setMemLoading,
-    getUserId, startNewSession, loadChatList, loadPastSession, deleteSession, handleNewChat
-  } = memory;
-
-  // Sync memory hook session state upward if parent provided setters
-  useEffect(() => { if (setCurrentSessionId) setCurrentSessionId(memSessionId); }, [memSessionId]);
-  useEffect(() => { if (setChatList) setChatList(memChatList); }, [memChatList]);
-  useEffect(() => { if (setChatListLoading) setChatListLoading(memLoading); }, [memLoading]);
 
   // ── SCROLL TO BOTTOM ─────────────────────────────────
   useEffect(() => {
@@ -107,10 +105,10 @@ const ChatArea = ({
 
   // ── AUTO SESSION ON LOGIN ─────────────────────────────
   useEffect(() => {
-    if (isLoggedIn && !memSessionId && getUserId()) {
-      startNewSession().then(() => loadChatList());
+    if (isLoggedIn && !currentSessionId && getUserId()) {
+      startNewSession();
     }
-  }, [isLoggedIn, session, memSessionId]);
+  }, [isLoggedIn, session, currentSessionId, startNewSession, getUserId]);
 
   // ── HEALTH CHECK ──────────────────────────────────────
   const checkHealth = useCallback(async () => {
@@ -123,6 +121,44 @@ const ChatArea = ({
     const i = setInterval(checkHealth, 10000);
     return () => clearInterval(i);
   }, [checkHealth]);
+
+  // ── AUTO-SAVE GUEST MESSAGES & TITLE ─────────────────
+  useEffect(() => {
+    if (currentSessionId && currentSessionId.toString().startsWith('guest_')) {
+      // 1. Save messages to localStorage
+      try {
+        localStorage.setItem('guest_chat_messages_' + currentSessionId, JSON.stringify(localMessages));
+      } catch (e) {
+        console.error('Error saving guest messages to localStorage:', e);
+      }
+
+      // 2. Auto-update session title from first user message if title is still 'New Chat'
+      const userMsgs = localMessages.filter(m => m.role === 'user');
+      if (userMsgs.length > 0) {
+        try {
+          const savedChats = localStorage.getItem('guest_chat_list');
+          const chats = savedChats ? JSON.parse(savedChats) : [];
+          const currentChat = chats.find(c => c.session_id === currentSessionId);
+          
+          if (currentChat && currentChat.title === 'New Chat') {
+            const firstMsg = userMsgs[0].content || '';
+            const newTitle = firstMsg.trim().substring(0, 30) || 'New Chat';
+            const updatedChats = chats.map(c => 
+              c.session_id === currentSessionId ? { ...c, title: newTitle, updated_at: new Date().toISOString() } : c
+            );
+            localStorage.setItem('guest_chat_list', JSON.stringify(updatedChats));
+            
+            // Sync the sidebar chatList state
+            if (setChatList) {
+              setChatList(updatedChats);
+            }
+          }
+        } catch (e) {
+          console.error('Error updating guest session title:', e);
+        }
+      }
+    }
+  }, [localMessages, currentSessionId, setChatList]);
 
   // ── INITIAL QUERY ─────────────────────────────────────
   useEffect(() => {
@@ -207,8 +243,10 @@ const ChatArea = ({
     const trans = UI_TRANSLATIONS[lang] || UI_TRANSLATIONS.en;
     setIsLoggedIn(false);
     setSession({ type: 'GUEST', phone: null, businessId: null });
-    setMemSessionId(null);
-    setMemChatList([]);
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('session');
+    setCurrentSessionId(null);
+    setChatList([]);
     setFlowMode('QUERY');
     setWizardStep(0);
     setWizardData({});
@@ -217,6 +255,78 @@ const ChatArea = ({
       { id: 'hint', role: 'bot', type: 'text', content: trans.menu_hint || "💡 Click the ⋮ menu at the top for more options." }
     ]);
     toast?.success('Logged out successfully');
+  };
+
+  // ── EXPORT CHAT CONVERSATION ────────────────────────────
+  const handleExportChat = () => {
+    try {
+      let textContent = `==================================================\n`;
+      textContent += `          CITYHANGAROUNDS CHAT CONVERSATION LOG   \n`;
+      textContent += `==================================================\n`;
+      textContent += `Export Date: ${new Date().toLocaleString()}\n`;
+      textContent += `Session ID: ${currentSessionId || 'N/A'}\n`;
+      textContent += `Language: ${currentLanguage || 'en'}\n`;
+      textContent += `User: ${session?.phone || session?.email || 'Guest'}\n`;
+      textContent += `==================================================\n\n`;
+
+      localMessages.forEach((msg, idx) => {
+        if (msg.type === 'thinking') return;
+        const roleName = msg.role === 'user' ? 'USER' : 'AI ASSISTANT';
+        
+        // Simple human-readable representation of time
+        textContent += `[${roleName}]:\n`;
+        
+        if (msg.type === 'text' || msg.type === 'faq') {
+          textContent += `${msg.content}\n`;
+        } else if (msg.type === 'database') {
+          textContent += `${msg.intro || 'Results found:'}\n`;
+          const items = Array.isArray(msg.content) ? msg.content : Array.isArray(msg.data) ? msg.data : [];
+          items.forEach((biz, bidx) => {
+            textContent += `  ${bidx + 1}. ${biz.business_name} | ${biz.business_category || 'Business'} | Rating: ${biz.ratings || '0.0'} (${biz.reviews_count || 0} reviews)\n`;
+            textContent += `     Address: ${biz.address || 'N/A'} | Phone: ${biz.phone_number || 'N/A'}\n`;
+            if (biz.website_url) textContent += `     Website: ${biz.website_url}\n`;
+          });
+        } else if (msg.type === 'suggestions') {
+          textContent += `${msg.intro || 'Suggested profile updates:'}\n`;
+          (msg.content || []).forEach((s, sidx) => {
+            textContent += `  - ${s.title}: ${s.reason}\n`;
+          });
+        } else if (msg.type === 'manage_products') {
+          textContent += `${msg.intro || 'Products list:'}\n`;
+          (msg.content || []).forEach((p, pidx) => {
+            textContent += `  - ${p.name} (Price: ₹${p.price}) | ${p.description || ''}\n`;
+          });
+        } else if (msg.type === 'manage_deals') {
+          textContent += `${msg.intro || 'Deals list:'}\n`;
+          (msg.content || []).forEach((d, didx) => {
+            textContent += `  - ${d.title} (${d.discount_pct}% OFF) | Expires: ${d.expiry_date || 'N/A'}\n`;
+          });
+        } else {
+          textContent += `${String(msg.content || '')}\n`;
+        }
+        textContent += `\n--------------------------------------------------\n\n`;
+      });
+
+      textContent += `==================================================\n`;
+      textContent += `             END OF CONVERSATION LOG              \n`;
+      textContent += `==================================================\n`;
+
+      // Trigger download
+      const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HBD_Chat_Session_${currentSessionId || 'export'}_${new Date().toISOString().slice(0,10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast?.success('Conversation exported successfully!');
+    } catch (e) {
+      console.error('Export failed:', e);
+      toast?.error('Failed to export conversation.');
+    }
   };
 
   // ── LOGIN SUCCESS ─────────────────────────────────────
@@ -228,7 +338,7 @@ const ChatArea = ({
       const trans = UI_TRANSLATIONS[currentLanguage || 'en'] || UI_TRANSLATIONS.en;
       if (res.status === 'logged_in' && res.businesses?.length) {
         const biz = res.businesses[0];
-        const sessionData = { type: 'BUSINESS', businessId: biz.global_business_id };
+        const sessionData = { type: 'BUSINESS', businessId: biz.global_business_id, city: biz.city };
         if (method === 'phone') sessionData.phone = identifier;
         else { sessionData.email = identifier; if (biz.phone_number) sessionData.phone = biz.phone_number; }
         setSession(sessionData);
@@ -238,12 +348,6 @@ const ChatArea = ({
           content: `👋 ${trans.welcome_back || 'Welcome back'}, ${biz.business_name}!`
         }]);
         toast?.success(`Welcome back, ${biz.business_name}!`);
-        try {
-          const sRes = await api.createChatSession(identifier);
-          if (sRes.success) setMemSessionId(sRes.session_id);
-          const list = await api.listChatSessions(identifier);
-          setMemChatList(Array.isArray(list) ? list : []);
-        } catch (err) { console.error('Chat session init error:', err); }
       } else {
         const sessionData = { type: 'REGISTERED' };
         if (method === 'phone') sessionData.phone = identifier;
@@ -255,12 +359,6 @@ const ChatArea = ({
           { id: Date.now() + 1, role: 'bot', type: 'text', content: trans.menu_hint || "💡 Click the ⋮ menu for more actions." }
         ]);
         toast?.info('Logged in. No business found — you can add one!');
-        try {
-          const sRes = await api.createChatSession(identifier);
-          if (sRes.success) setMemSessionId(sRes.session_id);
-          const list = await api.listChatSessions(identifier);
-          setMemChatList(Array.isArray(list) ? list : []);
-        } catch {}
       }
     } catch (e) {
       toast?.error(`Login error: ${e.message}`);
@@ -277,21 +375,47 @@ const ChatArea = ({
     setLocalMessages(prev => [...prev, { id: Date.now(), role: 'user', type: 'text', content: text }]);
     setMsgHistory(prev => prev[prev.length - 1] === text ? prev : [...prev, text]);
     setHistoryIndex(-1);
+    
+    // Set status and add thinking
+    setThinkingStatus('Analyzing query...');
     addThinking();
+
+    let statusInterval = null;
+    let elapsed = 0;
+    statusInterval = setInterval(() => {
+      elapsed += 0.5;
+      if (elapsed >= 5.0) {
+        setThinkingStatus('Finalizing response...');
+      } else if (elapsed >= 2.5) {
+        const isSearch = /restaurant|gym|hotel|shop|store|doctor|dentist|salon|spa|listing|business|in|near|find|search|where|online|scrape/i.test(text);
+        if (isSearch) {
+          setThinkingStatus('Scraping online web listings...');
+        } else {
+          setThinkingStatus('Synthesizing answer...');
+        }
+      } else if (elapsed >= 1.0) {
+        setThinkingStatus('Searching database...');
+      }
+    }, 500);
 
     try {
       const lang = currentLanguage || 'en';
       const trans = UI_TRANSLATIONS[lang] || UI_TRANSLATIONS.en;
       const wasWizardFlow = await wizards.handleWizardSend(text, trans);
-      if (wasWizardFlow) return;
+      if (wasWizardFlow) {
+        clearInterval(statusInterval);
+        setThinkingStatus('');
+        return;
+      }
 
-      let activeSessionId = memSessionId;
-      if (isLoggedIn && !activeSessionId) {
+      let activeSessionId = currentSessionId;
+      if (!activeSessionId) {
         activeSessionId = await startNewSession();
-        await loadChatList();
       }
 
       const data = await api.query({ query: text, session, language: lang, session_id: activeSessionId });
+      clearInterval(statusInterval);
+      setThinkingStatus('');
       removeThinking();
 
       const responseType = data.type || 'text';
@@ -303,6 +427,8 @@ const ChatArea = ({
         intro: data.intro, suggestions: data.suggestions, prompt: data.prompt,
       }]);
     } catch (e) {
+      clearInterval(statusInterval);
+      setThinkingStatus('');
       removeThinking();
       const lang = currentLanguage || 'en';
       const trans = UI_TRANSLATIONS[lang] || UI_TRANSLATIONS.en;
@@ -356,6 +482,34 @@ const ChatArea = ({
       setLocalMessages(prev => [...prev, { id: Date.now(), role: 'user', type: 'text', content: actionLabels[action] }]);
     }
 
+    if (action === 'next_option' || action === 'prev_option' || action === 'filter_area' || action === 'filter_rating' || action === 'search_another') {
+      handleSend(null, payload);
+      return;
+    }
+
+    if (action === 'delete_business') {
+      if (window.confirm("Are you sure you want to permanently delete this business listing? This will also delete all products and deals associated with it.")) {
+        setThinkingStatus('Deleting business listing...');
+        addThinking();
+        try {
+          const res = await api.deleteBusiness(payload);
+          setThinkingStatus('');
+          removeThinking();
+          if (res.success) {
+            toast?.success("Business deleted successfully!");
+            handleLogout();
+          } else {
+            toast?.error(res.message || "Failed to delete business.");
+          }
+        } catch (e) {
+          setThinkingStatus('');
+          removeThinking();
+          toast?.error(e.message || "Failed to delete business.");
+        }
+      }
+      return;
+    }
+
     if (action === 'go_back') return handleBack();
     if (action === 'login_trigger') return setShowLoginPopup(true);
     if (action === 'cancel_sub_menu') return;
@@ -395,25 +549,24 @@ const ChatArea = ({
     }
     if (action === 'reset_chat') { setShowResetConfirm(true); return; }
     if (action === 'confirm_reset') {
-      if (memSessionId && getUserId()) {
-        api.deleteChatSession(memSessionId, getUserId()).then(() => loadChatList());
+      if (currentSessionId && getUserId()) {
+        await handleDeleteSession(null, currentSessionId);
       }
       setShowResetConfirm(false);
-      const hint = trans.menu_hint || "💡 Click the ⋮ menu for more options.";
-      setLocalMessages([
-        { id: 'init', role: 'bot', type: 'text', content: trans.chat_cleared || 'Chat cleared!' },
-        { id: 'hint', role: 'bot', type: 'text', content: hint }
-      ]);
-      setResetConfirmCount(0); setFlowMode('QUERY'); setWizardStep(0); setWizardData({}); setMemSessionId(null);
-      toast?.success('Chat cleared');
+      setResetConfirmCount(0);
+      setFlowMode('QUERY');
+      setWizardStep(0);
+      setWizardData({});
       return;
     }
     if (action !== 'reset_chat') setResetConfirmCount(0);
 
     if (action === 'search') {
+      setThinkingStatus('Fetching business profile...');
       addThinking();
       try {
-        const data = await api.query({ query: 'show my business', session, language: lang, session_id: memSessionId });
+        const data = await api.query({ query: 'show my business', session, language: lang, session_id: currentSessionId });
+        setThinkingStatus('');
         removeThinking();
         if (!data || (!data.type && data.detail)) {
           setLocalMessages(prev => [...prev, { id: Date.now(), role: 'bot', type: 'text', content: '❌ Could not load your business.' }]);
@@ -424,12 +577,14 @@ const ChatArea = ({
           content: data.content ?? data.data ?? data.detail ?? 'No data found.',
           intro: data.intro, prompt: data.prompt, suggestions: data.suggestions
         }]);
-      } catch { removeThinking(); toast?.error('Error loading business'); }
+      } catch { setThinkingStatus(''); removeThinking(); toast?.error('Error loading business'); }
     }
     if (action === 'update') {
+      setThinkingStatus('Preparing business update wizard...');
       addThinking();
       try {
-        const data = await api.query({ query: 'update my business', session, language: lang, session_id: memSessionId });
+        const data = await api.query({ query: 'update my business', session, language: lang, session_id: currentSessionId });
+        setThinkingStatus('');
         removeThinking();
         setLocalMessages(prev => [...prev, { id: Date.now(), role: 'suggestions', content: data.content, intro: data.intro }]);
       } catch { removeThinking(); }
@@ -459,7 +614,7 @@ const ChatArea = ({
     if (action === 'manage_products') {
       addThinking();
       try {
-        const data = await api.query({ query: 'manage product', session, language: lang, session_id: memSessionId });
+        const data = await api.query({ query: 'manage product', session, language: lang, session_id: currentSessionId });
         removeThinking();
         setLocalMessages(prev => [...prev, {
           id: Date.now(), role: 'bot',
@@ -472,7 +627,7 @@ const ChatArea = ({
     if (action === 'manage_deals') {
       addThinking();
       try {
-        const data = await api.query({ query: 'manage deal', session, language: lang, session_id: memSessionId });
+        const data = await api.query({ query: 'manage deal', session, language: lang, session_id: currentSessionId });
         removeThinking();
         setLocalMessages(prev => [...prev, {
           id: Date.now(), role: 'bot',
@@ -634,6 +789,7 @@ const ChatArea = ({
                       </>
                     )}
                     <MenuBtn icon={<Plus size={14} style={{ color: '#10b981' }} />} label={UI_TRANSLATIONS[currentLanguage || 'en']?.btn_add || 'Add Business'} onClick={() => { setIsActionsMenuOpen(false); handleAction('add_new_business'); }} />
+                    <MenuBtn icon={<svg viewBox="0 0 24 24" width="14" height="14" stroke="#059669" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>} label="Export Chat" onClick={() => { setIsActionsMenuOpen(false); handleExportChat(); }} />
                     <div style={{ margin: '4px 12px', borderTop: '1px solid var(--border-subtle)' }} />
                     <MenuBtn icon={<RefreshCw size={14} style={{ color: 'var(--color-error)' }} />} label={UI_TRANSLATIONS[currentLanguage || 'en']?.btn_reset || 'Reset Chat'} onClick={() => { setIsActionsMenuOpen(false); handleAction('reset_chat'); }} color="error" />
                     {isLoggedIn && (
@@ -707,9 +863,10 @@ const ChatArea = ({
                 onAction={handleAction}
                 isLoggedIn={isLoggedIn}
                 session={session}
+                language={currentLanguage}
               />
             ))}
-            {isThinking && <TypingIndicator />}
+            {isThinking && <TypingIndicator status={thinkingStatus} />}
           </>
         )}
         <div ref={messagesEndRef} />

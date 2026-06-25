@@ -177,19 +177,84 @@ BACKEND_TRANSLATIONS = {
     }
 }
 
+# Caches for cities and categories to avoid disk I/O on every request
+CITIES_CACHE = []
+CATEGORIES_CACHE = []
+
+def load_cities_and_categories_cache():
+    global CITIES_CACHE, CATEGORIES_CACHE
+    CITIES_CACHE = [
+        "ahmedabad", "bengaluru", "bangalore", "chennai", "delhi", "hyderabad", "kolkata", "mumbai", "pune", "surat", 
+        "jaipur", "lucknow", "kanpur", "nagpur", "indore", "thane", "bhopal", "patna", "vadodara", "ghaziabad", 
+        "ludhiana", "agra", "nashik", "faridabad", "meerut", "rajkot", "kalyan", "vasai", "varanasi", "srinagar", 
+        "aurangabad", "dhanbad", "amritsar", "navi mumbai", "allahabad", "ranchi", "howrah", "coimbatore", 
+        "jabalpur", "gwalior", "vijayawada", "jodhpur", "madurai", "raipur", "kota", "guwahati", "chandigarh", 
+        "solapur", "hubli", "bareilly", "moradabad", "mysore", "gurgaon", "aligarh", "jalandhar", "tiruchirappalli", 
+        "bhubaneswar", "salem", "warangal", "mira-bhayandar", "thiruvananthapuram", "bhiwandi", "saharanpur", 
+        "guntur", "amravati", "noida", "jamshedpur", "bhilai", "cuttack", "kochi", "udaipur", "bhavnagar", 
+        "dehradun", "jamnagar", "ahmednagar", "ambajogai", "greater noida", "raghogarh", "shahjanpur", "taleigao"
+    ]
+    CATEGORIES_CACHE = [
+        "gym", "fitness", "hotel", "restaurant", "cafe", "salon", "beauty", "spa", "bakery", "pharmacy", 
+        "hospital", "clinic", "school", "bank", "shop", "grocery", "electronics", "automobile", "travel", 
+        "clothing", "jewellery", "boutique", "doctor", "dentist", "advocate", "lawyer", "laundry", "ac service", 
+        "advertising", "furniture", "hardware", "software", "it services", "scrap"
+    ]
+    try:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT LOWER(city) FROM g_map_master_table WHERE city IS NOT NULL AND city != ''")
+        db_cities = [r[0] for r in cur.fetchall()]
+        for dc in db_cities:
+            if dc not in CITIES_CACHE:
+                CITIES_CACHE.append(dc)
+        cur.execute("SELECT DISTINCT LOWER(business_category) FROM g_map_master_table WHERE business_category IS NOT NULL AND business_category != ''")
+        db_cats = [r[0] for r in cur.fetchall()]
+        for dc in db_cats:
+            if dc not in CATEGORIES_CACHE:
+                CATEGORIES_CACHE.append(dc)
+        conn.close()
+        print(f"[CACHE] Loaded {len(CITIES_CACHE)} cities and {len(CATEGORIES_CACHE)} categories.")
+    except Exception as e:
+        print(f"[CACHE] Error loading cache: {e}")
+
+# Initialize caches immediately on startup
+load_cities_and_categories_cache()
+
 def lang_fetch(key, lang="en"):
-    # Priority: 1. Cache, 2. Dynamic Translation, 3. English Fallback
+    # Pre-populated translations for search results
+    extra_translations = {
+        "en": {"found_results": "🔍 Found results in our local database:", "found_online": "🌐 Found results online:"},
+        "hi": {"found_results": "🔍 हमारे डेटाबेस में परिणाम मिले:", "found_online": "🌐 ऑनलाइन परिणाम मिले:"},
+        "gu": {"found_results": "🔍 અમારા સ્થાનિક ડેટાબેઝમાં પરિણામો મળ્યા:", "found_online": "🌐 ઓનલાઇન પરિણામો મળ્યા:"},
+        "te": {"found_results": "🔍 మా స్థానిక డేటాబేస్లో ఫలితాలు కనుగొనబడ్డాయి:", "found_online": "🌐 ఆన్‌లైన్‌లో ఫలితాలు కనుగొనబడ్డాయి:"},
+        "ta": {"found_results": "🔍 எங்களது உள்ளூர் தரவுத்தளத்தில் முடிவுகள் கண்டறியப்பட்டன:", "found_online": "🌐 இணையத்தில் முடிவுகள் கண்டறியப்பட்டன:"},
+        "mr": {"found_results": "🔍 आमच्या स्थानिक डेटाबेसमध्ये परिणाम आढळले:", "found_online": "🌐 ऑनलाइन परिणाम आढळले:"},
+        "bn": {"found_results": "🔍 আমাদের স্থানীয় ডাটাবেসে ফলাফল পাওয়া গেছে:", "found_online": "🌐 অনলাইনে ফলাফল পাওয়া গেছে:"},
+        "kn": {"found_results": "🔍 ನಮ್ಮ ಸ್ಥಳೀಯ ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ಫಲಿತಾಂಶಗಳು ಕಂಡುಬಂದಿವೆ:", "found_online": "🌐 ಆನ್‌ಲೈನ್‌ನಲ್ಲಿ ಫಲಿತಾಂಶಗಳು ಕಂಡುಬಂದಿವೆ:"}
+    }
+    
+    # Priority: 1. Extra Cache, 2. Main Cache, 3. Dynamic Translation, 4. English Fallback
+    lang_data = extra_translations.get(lang, {})
+    if key in lang_data:
+        return lang_data[key]
+        
     data = BACKEND_TRANSLATIONS.get(lang)
     if data and key in data:
         return data[key]
     
     eng_val = BACKEND_TRANSLATIONS["en"].get(key, key)
+    # Check if key is in extra English translations
+    if not eng_val or eng_val == key:
+        eng_val = extra_translations.get("en", {}).get(key, key)
+        
     if not lang or lang == "en": return eng_val
     
     # DYNAMIC TRANSLATION (Auto-Correction/Translation for 'all' languages)
     try:
         from llm_client import call_llm
         from models import MODEL
+
         prompt = f"Translate the following button label or UI text to language code '{lang}'. Return ONLY the translation. Text: '{eng_val}'"
         res = call_llm([{"role": "user", "content": prompt}], model=MODEL)
         translation = res.get("content", "").strip().replace("'", "").replace("\"", "")
@@ -227,8 +292,167 @@ def map_business_fields(biz_list):
         })
     return mapped_list
 
+# Rate Limiting & Prompt Injection Guards
+import time
+from fastapi import Request, Header
+from fastapi.responses import JSONResponse
+
+rate_limit_records = {}
+
+def check_rate_limit(ip_address: str):
+    now = time.time()
+    timestamps = [t for t in rate_limit_records.get(ip_address, []) if now - t < 60]
+    if len(timestamps) >= 100:
+        raise HTTPException(status_code=429, detail="Too many requests. Rate limit exceeded.")
+    timestamps.append(now)
+    rate_limit_records[ip_address] = timestamps
+
+@app.middleware("http")
+async def rate_limiting_and_security_middleware(request: Request, call_next):
+    ip = request.client.host
+    try:
+        check_rate_limit(ip)
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+    return await call_next(request)
+
+def check_prompt_injection(query: str) -> bool:
+    q = query.lower()
+    injection_keywords = [
+        "ignore previous instructions",
+        "system prompt",
+        "ignore rules",
+        "bypass",
+        "reveal system prompt",
+        "expose system instruction"
+    ]
+    for kw in injection_keywords:
+        if kw in q:
+            return True
+    return False
+
+# Audit Logging & User Helpers
+def log_audit_action(user_id: Optional[int], action: str, entity: str, entity_id: Optional[int], ip_address: Optional[str] = None):
+    try:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO audit_logs (user_id, action, entity, entity_id, ip_address)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, action, entity, entity_id, ip_address))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[AUDIT LOG] Error: {e}")
+
+def get_current_user_id(authorization: Optional[str] = Header(None), session: Optional[dict] = None) -> Optional[int]:
+    # Self-healing check: if called programmatically, authorization might be a Header object
+    auth_str = authorization if isinstance(authorization, str) else None
+    if auth_str and auth_str.startswith("Bearer "):
+        token = auth_str.split(" ")[1]
+        from auth_utils import decode_jwt_token
+        payload = decode_jwt_token(token)
+        if payload:
+            return payload.get("id")
+    if session:
+        phone = session.get("phone")
+        email = session.get("email")
+        if phone or email:
+            conn = sqlite3.connect(DATABASE_URL)
+            cur = conn.cursor()
+            if phone:
+                cur.execute("SELECT id FROM users WHERE phone = ?", (phone,))
+            else:
+                cur.execute("SELECT id FROM users WHERE email = ?", (email,))
+            row = cur.fetchone()
+            conn.close()
+            if row:
+                return row[0]
+    return None
+
+# Auth Request Models
+class RegisterRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: str
+    role: Optional[str] = "owner"
+
+class TokenLoginRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: str
+
 # OTP Storage (Mock)
 otp_storage = {}
+
+# Authentication Endpoints
+@app.post("/api/auth/register")
+def auth_register(req: RegisterRequest):
+    from auth_utils import hash_password, generate_jwt_token
+    clean_email = req.email.strip().lower() if req.email else None
+    clean_phone = req.phone.strip() if req.phone else None
+    if not clean_email and not clean_phone:
+        raise HTTPException(400, "Either email or phone is required")
+    pwd_hash = hash_password(req.password)
+    conn = sqlite3.connect(DATABASE_URL)
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO users (email, phone, password_hash, role) 
+            VALUES (?, ?, ?, ?)
+        """, (clean_email, clean_phone, pwd_hash, req.role or 'owner'))
+        user_id = cur.lastrowid
+        conn.commit()
+        log_audit_action(user_id, "REGISTER", "users", user_id, "system")
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(400, "User with this email or phone already exists")
+    conn.close()
+    token = generate_jwt_token({"id": user_id, "email": clean_email, "phone": clean_phone, "role": req.role or 'owner'})
+    return {"success": True, "token": token, "user": {"id": user_id, "email": clean_email, "phone": clean_phone, "role": req.role or 'owner'}}
+
+@app.post("/api/auth/login")
+def auth_login(req: TokenLoginRequest):
+    from auth_utils import verify_password, generate_jwt_token
+    clean_email = req.email.strip().lower() if req.email else None
+    clean_phone = req.phone.strip() if req.phone else None
+    if not clean_email and not clean_phone:
+        raise HTTPException(400, "Either email or phone is required")
+    conn = sqlite3.connect(DATABASE_URL)
+    cur = conn.cursor()
+    if clean_email:
+        cur.execute("SELECT id, email, phone, password_hash, role FROM users WHERE email = ?", (clean_email,))
+    else:
+        cur.execute("SELECT id, email, phone, password_hash, role FROM users WHERE phone = ?", (clean_phone,))
+    row = cur.fetchone()
+    conn.close()
+    if not row or not verify_password(req.password, row[3]):
+        raise HTTPException(400, "Invalid credentials")
+    user_id, u_email, u_phone, _, role = row
+    token = generate_jwt_token({"id": user_id, "email": u_email, "phone": u_phone, "role": role})
+    log_audit_action(user_id, "LOGIN", "users", user_id, "system")
+    return {"success": True, "token": token, "user": {"id": user_id, "email": u_email, "phone": u_phone, "role": role}}
+
+@app.post("/api/auth/forgot-password")
+def auth_forgot_password(req: dict):
+    email = req.get("email")
+    phone = req.get("phone")
+    import random
+    otp = str(random.randint(1000, 9999))
+    identifier = email or phone
+    if not identifier: raise HTTPException(400, "Identifier is required")
+    otp_storage[identifier] = otp
+    print(f"DEBUG [FORGOT PASSWORD]: Generated OTP {otp} for {identifier}")
+    return {"success": True, "message": f"Verification code sent (Dev: {otp})"}
+
+@app.post("/api/auth/verify-otp")
+def auth_verify_otp(req: dict):
+    identifier = req.get("email") or req.get("phone")
+    otp = req.get("otp")
+    if not identifier or not otp: raise HTTPException(400, "Missing identifier or OTP")
+    if otp_storage.get(identifier) == str(otp) or str(otp) == "1234":
+        return {"success": True, "message": "Verification complete"}
+    raise HTTPException(400, "Invalid OTP code")
 
 @app.post("/api/send-otp-phone")
 def send_otp_phone(req: LoginRequest):
@@ -246,11 +470,36 @@ def verify_otp_phone(req: dict):
     
     if otp_storage.get(phone) == str(otp) or str(otp) == "1234":
         from business_by_phone import get_businesses_by_phone
+        from auth_utils import generate_jwt_token
         try:
             raw = get_businesses_by_phone(phone)
-            return {"success": True, "status": "logged_in", "phone": phone, "businesses": map_business_fields(raw)}
+            # Ensure user exists in users table
+            conn = sqlite3.connect(DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute("SELECT id, role FROM users WHERE phone = ?", (phone,))
+            row = cur.fetchone()
+            if not row:
+                from auth_utils import hash_password
+                default_hash = hash_password("password123")
+                cur.execute("INSERT INTO users (phone, password_hash, role) VALUES (?, ?, 'owner')", (phone, default_hash))
+                user_id = cur.lastrowid
+                role = "owner"
+                conn.commit()
+            else:
+                user_id, role = row
+            conn.close()
+            
+            token = generate_jwt_token({"id": user_id, "email": None, "phone": phone, "role": role})
+            log_audit_action(user_id, "LOGIN_OTP_PHONE", "users", user_id, "system")
+            
+            return {
+                "success": True, 
+                "status": "logged_in", 
+                "phone": phone, 
+                "token": token,
+                "businesses": map_business_fields(raw)
+            }
         except ValueError as e:
-            # If phone not found, it's a new registration
             if "not registered" in str(e):
                 return {"success": True, "status": "registered", "phone": phone, "businesses": []}
             return {"success": False, "message": str(e)}
@@ -303,11 +552,39 @@ def send_otp_email(req: dict):
 def verify_otp_email(req: dict):
     email = req.get("email")
     otp = req.get("otp")
+    if not email or not otp: raise HTTPException(400, "Missing email/otp")
+    
     if otp_storage.get(email) == str(otp) or str(otp) == "1234":
         from business_by_phone import get_businesses_by_email
+        from auth_utils import generate_jwt_token
         try:
             raw = get_businesses_by_email(email)
-            return {"success": True, "status": "logged_in", "email": email, "businesses": map_business_fields(raw)}
+            # Ensure user exists in users table
+            conn = sqlite3.connect(DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute("SELECT id, role FROM users WHERE email = ?", (email,))
+            row = cur.fetchone()
+            if not row:
+                from auth_utils import hash_password
+                default_hash = hash_password("password123")
+                cur.execute("INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'owner')", (email, default_hash))
+                user_id = cur.lastrowid
+                role = "owner"
+                conn.commit()
+            else:
+                user_id, role = row
+            conn.close()
+            
+            token = generate_jwt_token({"id": user_id, "email": email, "phone": None, "role": role})
+            log_audit_action(user_id, "LOGIN_OTP_EMAIL", "users", user_id, "system")
+            
+            return {
+                "success": True, 
+                "status": "logged_in", 
+                "email": email, 
+                "token": token,
+                "businesses": map_business_fields(raw)
+            }
         except ValueError as e:
             if "not registered" in str(e):
                 return {"success": True, "status": "registered", "email": email, "businesses": []}
@@ -342,6 +619,7 @@ async def upload_image(file: UploadFile = File(...)):
 def login_legacy(req: LoginRequest):
     """Restore login for frontend compatibility while keeping security in Query"""
     from business_by_phone import get_businesses_by_phone, get_businesses_by_email
+    from auth_utils import generate_jwt_token
     try:
         if req.phone:
             raw = get_businesses_by_phone(req.phone)
@@ -352,35 +630,265 @@ def login_legacy(req: LoginRequest):
         else:
             raise HTTPException(400, "Missing identifier")
             
+        # Get or create user in users table
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        if req.phone:
+            cur.execute("SELECT id, role FROM users WHERE phone = ?", (identifier,))
+        else:
+            cur.execute("SELECT id, role FROM users WHERE email = ?", (identifier,))
+        row = cur.fetchone()
+        
+        if not row:
+            from auth_utils import hash_password
+            default_hash = hash_password("password123")
+            if req.phone:
+                cur.execute("INSERT INTO users (phone, password_hash, role) VALUES (?, ?, 'owner')", (identifier, default_hash))
+            else:
+                cur.execute("INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'owner')", (identifier, default_hash))
+            user_id = cur.lastrowid
+            role = "owner"
+            conn.commit()
+        else:
+            user_id, role = row
+        conn.close()
+        
+        token = generate_jwt_token({"id": user_id, "email": identifier if req.email else None, "phone": identifier if req.phone else None, "role": role})
+        log_audit_action(user_id, "LOGIN_LEGACY", "users", user_id, "system")
+        
         return {
             "success": True, 
             "status": "logged_in", 
             "identifier": identifier, 
+            "token": token,
             "businesses": map_business_fields(raw)
         }
     except Exception as e:
         return {"success": True, "status": "registered", "phone": req.phone, "email": req.email, "businesses": []}
 
+# --- HELPER FUNCTIONS FOR FAST BUSINESS SEARCH & PAGINATION ---
+def extract_category_and_city(query_str: str):
+    q = query_str.lower().strip()
+    
+    # Use pre-populated memory caches instead of querying SQLite on every search request
+    global CITIES_CACHE, CATEGORIES_CACHE
+    
+    found_city = None
+    for city in sorted(CITIES_CACHE, key=len, reverse=True):
+        if city in q:
+            found_city = city
+            break
+            
+    found_category = None
+    for cat in sorted(CATEGORIES_CACHE, key=len, reverse=True):
+        if cat in q or (cat.rstrip('s') in q if cat.endswith('s') else False):
+            found_category = cat
+            break
+            
+    return found_category, found_city
+
+
+def is_conversational_question(query_str: str) -> bool:
+    """Helper to detect if a query is a general conversational question about a category rather than a business search."""
+    q = query_str.lower().strip()
+    question_starters = [
+        "what is", "what are", "how to", "how do", "why do", "why is", "who is", "who are",
+        "explain", "tell me about", "tell me what", "can you explain", "what does"
+    ]
+    if any(q.startswith(starter) for starter in question_starters):
+        # If it also explicitly contains search keywords like 'in [city]' or 'near', treat as search
+        if " in " in q or "near" in q or "where is" in q:
+            return False
+        return True
+    return False
+
+
+def _get_last_search_metadata(session_id: str):
+    """Retrieves the search_metadata dictionary from the last assistant database response in this session."""
+    if not session_id:
+        return None
+    try:
+        conn = sqlite3.connect(DATABASE_URL)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        # Look back up to 10 assistant messages to find the last database search response containing metadata
+        cur.execute(
+            "SELECT content FROM chat_messages WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 10",
+            (session_id,)
+        )
+        rows = cur.fetchall()
+        conn.close()
+        for r in rows:
+            content = r["content"]
+            try:
+                data = json.loads(content)
+                if isinstance(data, dict) and data.get("type") == "database" and "search_metadata" in data:
+                    return data["search_metadata"]
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"[Metadata Fetch Error] {e}")
+    return None
+
+
+def query_local_businesses(category: str, city: str, offset: int = 0, limit: int = 10, area: str = None, min_rating: float = None):
+    conn = sqlite3.connect(DATABASE_URL)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    
+    conditions = [
+        "(LOWER(business_category) LIKE ? OR LOWER(subcategory) LIKE ? OR LOWER(business_name) LIKE ?)",
+        "LOWER(city) LIKE ?"
+    ]
+    params = [f"%{category}%", f"%{category}%", f"%{category}%", f"%{city}%"]
+    
+    if area:
+        conditions.append("LOWER(area) LIKE ?")
+        params.append(f"%{area.lower().strip()}%")
+        
+    if min_rating:
+        conditions.append("ratings >= ?")
+        params.append(float(min_rating))
+        
+    where_clause = " AND ".join(conditions)
+    
+    query_sql = f"""
+        SELECT *, (ratings * 0.75 + reviews_count * 0.002) as score
+        FROM g_map_master_table
+        WHERE {where_clause}
+        ORDER BY score DESC
+        LIMIT ? OFFSET ?
+    """
+    params.extend([limit, offset])
+    
+    cur.execute(query_sql, params)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def count_local_businesses(category: str, city: str, area: str = None, min_rating: float = None):
+    conn = sqlite3.connect(DATABASE_URL)
+    cur = conn.cursor()
+    
+    conditions = [
+        "(LOWER(business_category) LIKE ? OR LOWER(subcategory) LIKE ? OR LOWER(business_name) LIKE ?)",
+        "LOWER(city) LIKE ?"
+    ]
+    params = [f"%{category}%", f"%{category}%", f"%{category}%", f"%{city}%"]
+    
+    if area:
+        conditions.append("LOWER(area) LIKE ?")
+        params.append(f"%{area.lower().strip()}%")
+        
+    if min_rating:
+        conditions.append("ratings >= ?")
+        params.append(float(min_rating))
+        
+    where_clause = " AND ".join(conditions)
+    
+    query_sql = f"""
+        SELECT COUNT(*)
+        FROM g_map_master_table
+        WHERE {where_clause}
+    """
+    cur.execute(query_sql, params)
+    count = cur.fetchone()[0]
+    conn.close()
+    return count
+
 @app.post("/api/query")
 def search(req: SearchRequest):
     try:
         from assistant_manager import classify_intent, get_greeting_response, is_greeting, get_guidance, get_assistant_response
+        
+        # --- PROMPT INJECTION CHECK ---
+        if check_prompt_injection(req.query):
+            resp = {"type": "faq", "data": "Safety check failed. Please submit a valid query."}
+            if req.session_id:
+                _save_chat_message(req.session_id, "assistant", json.dumps(resp))
+            return resp
+            
         q_lower = req.query.lower().strip()
         session_phone = req.session.get("phone") if req.session else None
         session_email = req.session.get("email") if req.session else None
         lang = req.language or "en"
         chat_session_id = req.session_id  # May be None for old clients
 
+        # --- STATEFUL SEARCH PAGINATION & FILTERS REWRITER ---
+        # Detect follow-up search actions
+        is_next = q_lower in ["next", "show next 10 results", "next results", "next option", "more", "/next"]
+        is_prev = q_lower in ["prev", "previous", "previous results", "show previous 10 results", "/prev"]
+        is_filter_rating = q_lower.startswith("filter by rating:")
+        is_filter_area = q_lower.startswith("filter by area:")
+        is_show_nearby = q_lower in ["show nearby", "nearby", "near me"]
+        is_search_another = q_lower in ["search another location", "search another city"]
+
+        # Default parameters
+        current_offset = 0
+        active_area = None
+        active_min_rating = None
+        is_follow_up = is_next or is_prev or is_filter_rating or is_filter_area or is_show_nearby or is_search_another
+        
+        # Retrieve search context from last assistant message metadata
+        metadata = None
+        if is_follow_up and chat_session_id:
+            metadata = _get_last_search_metadata(chat_session_id)
+            
+        if metadata:
+            category = metadata.get("category")
+            city = metadata.get("city")
+            current_offset = metadata.get("offset", 0)
+            active_area = metadata.get("area")
+            active_min_rating = metadata.get("min_rating")
+            
+            # Apply command adjustments
+            if is_next:
+                current_offset += 10
+            elif is_prev:
+                current_offset = max(0, current_offset - 10)
+            elif is_filter_rating:
+                # Extract rating, e.g. "Filter by Rating: 4.5+" -> 4.5
+                rating_str = q_lower.replace("filter by rating:", "").replace("+", "").strip()
+                if rating_str == "all":
+                    active_min_rating = None
+                else:
+                    try:
+                        active_min_rating = float(rating_str)
+                    except:
+                        pass
+                current_offset = 0  # reset offset on new filter
+            elif is_filter_area:
+                # Extract area, e.g. "Filter by Area: Navrangpura" -> "Navrangpura"
+                area_str = q_lower.replace("filter by area:", "").strip()
+                active_area = area_str if area_str and area_str != "all" else None
+                current_offset = 0  # reset offset on new filter
+            elif is_show_nearby:
+                # Filter by user's area if logged in
+                if req.session and req.session.get("area"):
+                    active_area = req.session.get("area")
+                else:
+                    # Fallback
+                    pass
+                current_offset = 0
+                
+            # Rewrite query so the search runs on the original category and city
+            original_query = f"{category} in {city}"
+            req.query = original_query
+            q_lower = original_query.lower().strip()
+            print(f"[FOLLOW-UP SEARCH] Action resolved: '{req.query}', Offset: {current_offset}, Area: {active_area}, Rating: {active_min_rating}")
+        else:
+            original_query = req.query
+
         # --- MEMORY: Save user message & load history ---
         if chat_session_id:
-            _save_chat_message(chat_session_id, "user", req.query)
-            _update_session_title(chat_session_id, req.query)
+            _save_chat_message(chat_session_id, "user", original_query)
+            _update_session_title(chat_session_id, original_query)
             chat_history = _get_recent_history(chat_session_id, limit=10)
         else:
             chat_history = []
 
-        # --- MANDATORY AUTH CHECK for MY BUSINESS actions (must run BEFORE cmd_map) ---
-        # These phrases always go to the auth path, never to command shortcuts
+        # --- 1. MANDATORY AUTH CHECK for MY BUSINESS actions (Must run FIRST) ---
         is_my_biz_query = any(x in q_lower for x in [
             "show my business", "show business",
             "update my business", "update business",
@@ -390,10 +898,11 @@ def search(req: SearchRequest):
 
         if is_my_biz_query:
             if not session_phone and not session_email:
-                return {"type": "faq", "data": "Please login with your mobile number or email to manage your business profile. Click 'Login' at the top!"}
+                resp = {"type": "faq", "data": "Please login with your mobile number or email to manage your business profile. Click 'Login' at the top!"}
+                if chat_session_id:
+                    _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+                return resp
 
-            
-            # --- FETCH BY PHONE OR EMAIL (PREVENTS LEAKING) ---
             from business_by_phone import normalize_phone, get_businesses_by_phone, get_businesses_by_email
             try:
                 if session_phone:
@@ -402,12 +911,15 @@ def search(req: SearchRequest):
                     raw_matches = get_businesses_by_email(session_email)
                     
                 if not raw_matches:
-                    return {"type": "faq", "data": "I couldn't find a business registered with your credentials."}
+                    resp = {"type": "faq", "data": "I couldn't find a business registered with your credentials."}
+                    if chat_session_id:
+                        _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+                    return resp
                 
                 biz_row = raw_matches[0]
                 results = map_business_fields([biz_row])
                 
-                # --- CASE 1: MANAGE PRODUCTS (Highest Priority) ---
+                # CASE 1: MANAGE PRODUCTS
                 if "manage product" in q_lower or "show product" in q_lower:
                     conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
                     cur = conn.cursor()
@@ -420,12 +932,11 @@ def search(req: SearchRequest):
                         resp = {"type": "faq", "data": "You haven't added any products yet. Click 'Add Product' to start!"}
                     else:
                         resp = {"type": "manage_products", "content": items, "intro": "Here are your products:"}
-                    
                     if chat_session_id:
                         _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
                     return resp
 
-                # --- CASE 2: MANAGE DEALS ---
+                # CASE 2: MANAGE DEALS
                 elif "manage deal" in q_lower or "show deal" in q_lower:
                     conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
                     cur = conn.cursor()
@@ -438,18 +949,14 @@ def search(req: SearchRequest):
                         resp = {"type": "faq", "data": "You haven't added any deals yet. Click 'Add Deal' to start!"}
                     else:
                         resp = {"type": "manage_deals", "content": items, "intro": "Here are your active deals:"}
-                    
                     if chat_session_id:
                         _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
                     return resp
 
-                # --- CASE 3: SHOW BUSINESS PROFILE ---
+                # CASE 3: SHOW BUSINESS PROFILE
                 elif "show" in q_lower:
                     biz = raw_matches[0]
-                    # Return the mapped business card (renders as a full info card)
                     mapped = map_business_fields([biz])[0]
-
-                    # Also build inline update suggestions so user can tap to edit
                     fields = [
                         ("name", "Business Name"), ("category", "Category"),
                         ("phone_number", "Phone"), ("address", "Address"),
@@ -468,7 +975,6 @@ def search(req: SearchRequest):
                             "is_missing": is_miss
                         })
                     suggs.sort(key=lambda x: not x["is_missing"])
-
                     resp = {
                         "type": "database",
                         "data": [mapped],
@@ -479,13 +985,11 @@ def search(req: SearchRequest):
                     if chat_session_id:
                         _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
                     return resp
-
                 
-                # --- CASE 4: UPDATE BUSINESS PROFILE ---
+                # CASE 4: UPDATE BUSINESS PROFILE
                 elif "update" in q_lower:
                     biz = raw_matches[0]
                     t = lambda k: lang_fetch(k, lang)
-                    
                     fields = [
                         ("name", t("name")), ("category", t("category")), 
                         ("phone_number", t("phone_number")), ("address", t("address")), 
@@ -508,13 +1012,11 @@ def search(req: SearchRequest):
                     if chat_session_id:
                         _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
                     return resp
-
             except Exception as e:
                 print(f"Error in Auth Fast-path: {e}")
                 return {"type": "faq", "data": "I had trouble finding your business. Please ensure you are logged in."}
 
-
-        # --- QUICK COMMAND SHORTCUTS (exact match only, runs AFTER auth check) ---
+        # --- 2. QUICK COMMAND SHORTCUTS ---
         cmd_map = {
             "add product": "start_add_product",
             "add deal": "start_add_deal",
@@ -526,25 +1028,179 @@ def search(req: SearchRequest):
         if q_lower in cmd_map:
             return {"type": "command", "command": cmd_map[q_lower]}
 
-        # --- GENERAL FLOW ---
+        # --- 3. GREETINGS (0ms Response Time) ---
+        if is_greeting(req.query):
+            resp = {"type": "faq", "data": get_greeting_response(lang)}
+            if chat_session_id:
+                _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+            return resp
 
-        if is_greeting(req.query): return {"type": "faq", "data": get_greeting_response(lang)}
-        
+        # --- 4. FAST SEARCH PATH (Response time < 50ms) ---
+        category, city = extract_category_and_city(q_lower)
+        # Verify it's a real search query, not a conversational question containing a category
+        if category and not is_conversational_question(req.query):
+            # Fallback city if not found in query
+            if not city:
+                if session_phone or session_email:
+                    from business_by_phone import get_businesses_by_phone, get_businesses_by_email
+                    try:
+                        ub = get_businesses_by_phone(session_phone) if session_phone else get_businesses_by_email(session_email)
+                        if ub:
+                            city = ub[0].get("city", "").lower()
+                    except:
+                        pass
+                if not city:
+                    try:
+                        conn = sqlite3.connect(DATABASE_URL)
+                        cur = conn.cursor()
+                        cur.execute("SELECT city, COUNT(*) as cnt FROM g_map_master_table WHERE city != '' GROUP BY city ORDER BY cnt DESC LIMIT 1")
+                        r = cur.fetchone()
+                        city = r[0].lower() if r else "surat"
+                        conn.close()
+                    except:
+                        city = "surat"
+
+            print(f"[FAST SEARCH] Category: '{category}', City: '{city}', Offset: {current_offset}, Area: {active_area}, Rating: {active_min_rating}")
+            
+            # Query SQLite local DB with active pagination and filters
+            results = query_local_businesses(category, city, offset=current_offset, limit=10, area=active_area, min_rating=active_min_rating)
+            
+            # Trigger online scraping on page 0 if < 3 results or explicit online search requested
+            explicit_online = any(w in q_lower for w in ["online", "live", "web", "scrape", "internet", "google", "find online", "search online", "latest", "current", "real-time", "real time"])
+            if (len(results) < 3 or explicit_online) and current_offset == 0 and not active_area and not active_min_rating:
+                try:
+                    from search_online import search_online_and_save
+                    print(f"[FAST SEARCH] Scraped online search for '{category} in {city}' (results count: {len(results)}, explicit: {explicit_online})")
+                    online_results = search_online_and_save(f"{category} in {city}")
+                    if online_results:
+                        load_cities_and_categories_cache()
+                        results = query_local_businesses(category, city, offset=current_offset, limit=10)
+                except Exception as scraping_err:
+                    print(f"[FAST SEARCH] Scraping failed: {scraping_err}")
+
+            if results or current_offset > 0:
+                mapped_results = map_business_fields(results) if results else []
+                total_count = count_local_businesses(category, city, area=active_area, min_rating=active_min_rating)
+                
+                # Build rich ChatGPT-style interactive suggestions
+                suggestions = []
+                if total_count > current_offset + 10:
+                    suggestions.append({
+                        "title": "Next 10 Results ⏭️",
+                        "action": "next_option",
+                        "query": "Show Next 10 Results"
+                    })
+                if current_offset > 0:
+                    suggestions.append({
+                        "title": "Previous Results ⏮️",
+                        "action": "prev_option",
+                        "query": "Previous Results"
+                    })
+                
+                # Add area dynamic suggestion chips based on database presence
+                try:
+                    conn = sqlite3.connect(DATABASE_URL)
+                    cur = conn.cursor()
+                    cur.execute(
+                        "SELECT area, COUNT(*) as cnt FROM g_map_master_table WHERE LOWER(city) = ? AND (LOWER(business_category) LIKE ? OR LOWER(subcategory) LIKE ?) AND area != '' GROUP BY area ORDER BY cnt DESC LIMIT 3",
+                        (city.lower(), f"%{category}%", f"%{category}%")
+                    )
+                    top_areas = [r[0] for r in cur.fetchall()]
+                    conn.close()
+                    for ta in top_areas:
+                        if active_area and ta.lower() == active_area.lower():
+                            continue
+                        suggestions.append({
+                            "title": f"Area: {ta} 📍",
+                            "action": "filter_area",
+                            "query": f"Filter by Area: {ta}"
+                        })
+                except Exception as e:
+                    print(f"Error fetching top areas: {e}")
+                
+                # Add rating dynamic suggestion chips
+                if not active_min_rating or active_min_rating < 4.5:
+                    suggestions.append({
+                        "title": "Filter 4.5+ ⭐",
+                        "action": "filter_rating",
+                        "query": "Filter by Rating: 4.5+"
+                    })
+                elif active_min_rating == 4.5:
+                    suggestions.append({
+                        "title": "Clear Rating 🌟",
+                        "action": "clear_rating",
+                        "query": "Filter by Rating: All"
+                    })
+                
+                # Location switch chip
+                suggestions.append({
+                    "title": "Search Another City 🔍",
+                    "action": "search_another_city",
+                    "query": "Search Another Location"
+                })
+
+                # Embed search metadata in assistant response
+                search_meta = {
+                    "category": category,
+                    "city": city,
+                    "offset": current_offset,
+                    "area": active_area,
+                    "min_rating": active_min_rating
+                }
+                
+                filter_suffix = ""
+                if active_area:
+                    filter_suffix += f" in {active_area}"
+                if active_min_rating:
+                    filter_suffix += f" rated {active_min_rating}+ ⭐"
+
+                resp = {
+                    "type": "database",
+                    "data": mapped_results,
+                    "intro": f"Here are the {category}s in {city.capitalize()}{filter_suffix} (showing {current_offset + 1}-{min(current_offset + 10, total_count)} of {total_count}):",
+                    "prompt": f"Use the options below to paginate or filter listings:",
+                    "suggestions": suggestions,
+                    "search_metadata": search_meta
+                }
+                
+                # Log search history for analytics
+                try:
+                    conn = sqlite3.connect(DATABASE_URL)
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT INTO search_history (user_id, search_query, resolved_city, resolved_category)
+                        VALUES (?, ?, ?, ?)
+                    """, (get_current_user_id(session=req.session), original_query, city, category))
+                    conn.commit()
+                    conn.close()
+                except Exception as e:
+                    print(f"Error logging search history: {e}")
+
+                if chat_session_id:
+                    _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+                return resp
+
+        # --- 5. CONVERSATIONAL FALLBACK & AI FLOW ---
         intent = classify_intent(req.query)
-        keywords = ["phone", "address", "name", "category", "website", "city", "state", "area"]
-        if any(k in q_lower for k in keywords): intent = "BUSINESS_UPDATE"
 
         if intent in ["FAQ", "FAST_RESULT"]:
             from fast_result import fast_answer
-            return {"type": "faq", "data": fast_answer(req.query)}
+            resp = {"type": "faq", "data": fast_answer(req.query)}
+            if chat_session_id:
+                _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+            return resp
             
         if intent == "BUSINESS_UPDATE":
+            keywords = ["phone", "address", "name", "category", "website", "city", "state", "area"]
             if any(f in q_lower for f in keywords):
-                return {"type": "faq", "data": get_guidance(intent, req.query, lang)}
-            # Recurse to update flow
-            return search(SearchRequest(query="update my business", session=req.session, language=lang))
+                resp = {"type": "faq", "data": get_guidance(intent, req.query, lang)}
+                if chat_session_id:
+                    _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+                return resp
+            return search(SearchRequest(query="update my business", session=req.session, language=lang, session_id=chat_session_id))
 
         if intent in ["SEARCH_BUSINESS", "BUSINESS_STATUS", "TEXT_TO_SQL", "SUGGESTION"]:
+            explicit_online = any(w in q_lower for w in ["online", "live", "web", "scrape", "internet", "google", "find online", "search online", "latest", "current", "real-time", "real time"])
             try:
                 from text_to_sql import generate_sql
                 sql = generate_sql(req.query)
@@ -556,38 +1212,93 @@ def search(req: SearchRequest):
                     cur.execute(sql)
                     rows = cur.fetchall()
                     print("SQL:", sql)
-                    print("RowsFound:",len(rows))
+                    print("RowsFound:", len(rows))
                     cols = [c[0] for c in cur.description] if cur.description else []
                     conn.close()
-                    if rows: return {"type": "database", "data": map_business_fields([dict(zip(cols, r)) for r in rows]), "intro": lang_fetch("found_results", lang)}
+                    if rows and len(rows) >= 3 and not explicit_online:
+                        resp = {
+                            "type": "database", 
+                            "data": map_business_fields([dict(zip(cols, r)) for r in rows]), 
+                            "intro": lang_fetch("found_results", lang)
+                        }
+                        if chat_session_id:
+                            _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+                        return resp
             except Exception as e:
-                print("SQL ERROR:",e)
+                print("SQL ERROR:", e)
     
-            # --- ONLY DO ONLINE SEARCH for BUSINESSES if absolutely necessary ---
-            if intent == "SEARCH_BUSINESS":
+            if intent == "SEARCH_BUSINESS" or explicit_online:
                 try:
                     from search_online import search_online_and_save
                     online = search_online_and_save(req.query)
-                    if online: return {"type": "database", "data": map_business_fields(online), "intro": lang_fetch("found_online", lang)}
-                except: pass
+                    if online:
+                        resp = {"type": "database", "data": map_business_fields(online), "intro": lang_fetch("found_online", lang)}
+                        if chat_session_id:
+                            _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+                        return resp
+                except:
+                    pass
 
+        # Call Gemini assistant response with cleaned context-aware conversation history
         bot_reply = get_assistant_response(req.query, "No results.", lang, history=chat_history)
+        resp = {"type": "faq", "data": bot_reply}
         if chat_session_id:
-            _save_chat_message(chat_session_id, "assistant", bot_reply)
-        return {"type": "faq", "data": bot_reply}
+            _save_chat_message(chat_session_id, "assistant", json.dumps(resp))
+        return resp
     except Exception as e:
+        print(f"[Search Query Error] {e}")
         raise HTTPException(400, str(e))
 
 @app.put("/api/business/{business_id}")
-def update_biz(business_id: int, req: UpdateRequest):
+def update_biz(business_id: int, req: UpdateRequest, authorization: Optional[str] = Header(None)):
+    user_id = get_current_user_id(authorization=authorization)
+    if user_id:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT owner_id FROM g_map_master_table WHERE global_business_id = ?", (business_id,))
+        row = cur.fetchone()
+        conn.close()
+        if row and row[0] and row[0] != user_id:
+            raise HTTPException(403, "You do not have permission to modify this business listing.")
     try:
         from business_update import update_business
         update_business(business_id, {req.field: req.value})
+        log_audit_action(user_id, "UPDATE", "g_map_master_table", business_id, "system")
         return {"success": True}
     except Exception as e: raise HTTPException(400, str(e))
 
 @app.post("/api/business")
-def add_biz(req: BusinessAddRequest):
+def add_biz(req: BusinessAddRequest, authorization: Optional[str] = Header(None)):
+    user_id = get_current_user_id(authorization=authorization)
+    if not user_id:
+        # Legacy fallback: lookup user by phone/email
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        if req.phone:
+            cur.execute("SELECT id FROM users WHERE phone = ?", (req.phone.strip(),))
+        else:
+            cur.execute("SELECT id FROM users WHERE email = ?", (req.email.strip().lower(),))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            user_id = row[0]
+            
+    if not user_id:
+        # Create a default user account if missing
+        try:
+            conn = sqlite3.connect(DATABASE_URL)
+            cur = conn.cursor()
+            from auth_utils import hash_password
+            default_hash = hash_password("password123")
+            email_val = (req.email or "").strip().lower()
+            phone_val = req.phone.strip()
+            cur.execute("INSERT INTO users (email, phone, password_hash, role) VALUES (?, ?, ?, 'owner')", (email_val or None, phone_val or None, default_hash))
+            user_id = cur.lastrowid
+            conn.commit()
+            conn.close()
+        except Exception as ue:
+            print(f"Error auto-provisioning user: {ue}")
+            
     try:
         from datetime import datetime
         print(f"DEBUG: add_biz request: {req.dict()}")
@@ -600,10 +1311,10 @@ def add_biz(req: BusinessAddRequest):
             f"""
             INSERT INTO {BIZ_TABLE} (
                 business_name, address, phone_number, business_category, city, area, state, 
-                reviews_count, ratings, created_at, email
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                reviews_count, ratings, created_at, email, owner_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (req.name, req.address, req.phone, req.category, req.city, req.area, req.state, 0, 0.0, created_at, email_val)
+            (req.name, req.address, req.phone, req.category, req.city, req.area, req.state, 0, 0.0, created_at, email_val, user_id)
         )
         new_id = cur.lastrowid
         conn.commit()
@@ -619,38 +1330,100 @@ def add_biz(req: BusinessAddRequest):
         except Exception as csv_e:
             print(f"CSV Sync Error: {csv_e}")
 
+        log_audit_action(user_id, "CREATE", "g_map_master_table", new_id, "system")
         return {"success": True, "id": new_id}
     except Exception as e:
         print(f"Error adding business: {e}")
         raise HTTPException(400, str(e))
 
+@app.delete("/api/business/{business_id}")
+def delete_business_route(business_id: int, authorization: Optional[str] = Header(None)):
+    user_id = get_current_user_id(authorization=authorization)
+    if user_id:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT owner_id FROM g_map_master_table WHERE global_business_id = ?", (business_id,))
+        row = cur.fetchone()
+        conn.close()
+        if row and row[0] and row[0] != user_id:
+            raise HTTPException(403, "You do not have permission to delete this business listing.")
+    try:
+        conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM products WHERE business_id = ?", (business_id,))
+        cur.execute("DELETE FROM deals WHERE business_id = ?", (business_id,))
+        cur.execute(f"DELETE FROM {BIZ_TABLE} WHERE global_business_id = ?", (business_id,))
+        conn.commit()
+        conn.close()
+        
+        # Sync deletion to CSV
+        try:
+            if os.path.exists(CSV_PATH):
+                rows = []
+                with open(CSV_PATH, 'r', encoding='utf-8', newline='') as f:
+                    reader = csv.reader(f)
+                    for row in reader:
+                        if row and str(row[0]) == str(business_id):
+                            continue
+                        rows.append(row)
+                with open(CSV_PATH, 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(rows)
+        except Exception as csv_e:
+            print(f"CSV Delete Sync Error: {csv_e}")
+            
+        log_audit_action(user_id, "DELETE", "g_map_master_table", business_id, "system")
+        return {"success": True, "message": "Business deleted successfully"}
+    except Exception as e:
+        print(f"Error deleting business: {e}")
+        raise HTTPException(400, str(e))
+
 # --- PRODUCT & DEAL ENDPOINTS ---
 @app.post("/api/products")
-def add_product(req: AddProductRequest):
+def add_product(req: AddProductRequest, authorization: Optional[str] = Header(None)):
+    user_id = get_current_user_id(authorization=authorization)
+    if not req.business_id:
+        raise HTTPException(400, "business_id is required. Please login first.")
+    if user_id:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT owner_id FROM g_map_master_table WHERE global_business_id = ?", (req.business_id,))
+        row = cur.fetchone()
+        conn.close()
+        if row and row[0] and row[0] != user_id:
+            raise HTTPException(403, "You do not have permission to manage products for this business listing.")
     try:
         from datetime import datetime
         print(f"DEBUG add_product: business_id={req.business_id}, name={req.name}, price={req.price}, category={req.category}")
-        if not req.business_id:
-            raise HTTPException(400, "business_id is required. Please login first.")
         conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
         cur = conn.cursor()
         created_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         cur.execute("""
             INSERT INTO products (business_id, name, price, description, category, created_at, image_url)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (int(req.business_id), req.name, float(req.price), req.description or "", req.category or "", created_at, req.image_url or ""))
+        """, (int(req.business_id), req.name, float(req.price or 0.0), req.description or "", req.category or "", created_at, req.image_url or ""))
+        new_id = cur.lastrowid
         conn.commit()
         conn.close()
-        print(f"DEBUG add_product: SUCCESS for business_id={req.business_id}")
+        log_audit_action(user_id, "CREATE", "products", new_id, "system")
         return {"success": True}
-    except HTTPException:
-        raise
     except Exception as e:
         print(f"ERROR add_product: {e}")
         raise HTTPException(400, str(e))
 
 @app.post("/api/deals")
-def add_deal(req: AddDealRequest):
+def add_deal(req: AddDealRequest, authorization: Optional[str] = Header(None)):
+    user_id = get_current_user_id(authorization=authorization)
+    if not req.business_id:
+        raise HTTPException(400, "business_id is required.")
+    if user_id:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT owner_id FROM g_map_master_table WHERE global_business_id = ?", (req.business_id,))
+        row = cur.fetchone()
+        conn.close()
+        if row and row[0] and row[0] != user_id:
+            raise HTTPException(403, "You do not have permission to manage deals for this business listing.")
     try:
         from datetime import datetime
         conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
@@ -660,8 +1433,10 @@ def add_deal(req: AddDealRequest):
             INSERT INTO deals (business_id, title, discount_pct, expiry_date, description, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (req.business_id, req.title, req.discount_pct, req.expiry_date, req.description, created_at))
+        new_id = cur.lastrowid
         conn.commit()
         conn.close()
+        log_audit_action(user_id, "CREATE", "deals", new_id, "system")
         return {"success": True}
     except Exception as e: raise HTTPException(400, str(e))
 
@@ -690,24 +1465,52 @@ def get_deals(biz_id: int):
     except Exception as e: raise HTTPException(400, str(e))
 
 @app.delete("/api/products/{product_id}")
-def delete_product(product_id: int):
+def delete_product(product_id: int, authorization: Optional[str] = Header(None)):
+    user_id = get_current_user_id(authorization=authorization)
+    if user_id:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT business_id FROM products WHERE id = ?", (product_id,))
+        p_row = cur.fetchone()
+        if p_row:
+            cur.execute("SELECT owner_id FROM g_map_master_table WHERE global_business_id = ?", (p_row[0],))
+            b_row = cur.fetchone()
+            if b_row and b_row[0] and b_row[0] != user_id:
+                conn.close()
+                raise HTTPException(403, "You do not have permission to modify this product.")
+        conn.close()
     try:
         conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
         cur = conn.cursor()
         cur.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
         conn.close()
+        log_audit_action(user_id, "DELETE", "products", product_id, "system")
         return {"success": True}
     except Exception as e: raise HTTPException(400, str(e))
 
 @app.delete("/api/deals/{deal_id}")
-def delete_deal(deal_id: int):
+def delete_deal(deal_id: int, authorization: Optional[str] = Header(None)):
+    user_id = get_current_user_id(authorization=authorization)
+    if user_id:
+        conn = sqlite3.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT business_id FROM deals WHERE id = ?", (deal_id,))
+        d_row = cur.fetchone()
+        if d_row:
+            cur.execute("SELECT owner_id FROM g_map_master_table WHERE global_business_id = ?", (d_row[0],))
+            b_row = cur.fetchone()
+            if b_row and b_row[0] and b_row[0] != user_id:
+                conn.close()
+                raise HTTPException(403, "You do not have permission to modify this deal.")
+        conn.close()
     try:
         conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
         cur = conn.cursor()
         cur.execute("DELETE FROM deals WHERE id = ?", (deal_id,))
         conn.commit()
         conn.close()
+        log_audit_action(user_id, "DELETE", "deals", deal_id, "system")
         return {"success": True}
     except Exception as e: raise HTTPException(400, str(e))
 
@@ -743,14 +1546,35 @@ def search_by_address(address: str):
         raise HTTPException(400, str(e))
 
 @app.get("/api/categories")
-def get_categories():
+def get_categories(hierarchy: Optional[bool] = False):
     try:
         conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute(f"SELECT business_category as name, COUNT(*) as count FROM {BIZ_TABLE} WHERE business_category IS NOT NULL AND business_category != '' GROUP BY business_category ORDER BY count DESC LIMIT 12")
-        rows = cur.fetchall()
-        conn.close()
-        return [{"name": r[0], "category": r[0], "count": r[1]} for r in rows if r[0]]
+        if hierarchy:
+            cur.execute("SELECT id, name, icon FROM categories WHERE parent_id IS NULL ORDER BY name")
+            parents = [dict(p) for p in cur.fetchall()]
+            for parent in parents:
+                cur.execute("SELECT id, name, icon FROM categories WHERE parent_id = ? ORDER BY name", (parent["id"],))
+                children = [dict(c) for c in cur.fetchall()]
+                for child in children:
+                    cur.execute("SELECT COUNT(*) FROM g_map_master_table WHERE LOWER(business_category) = ?", (child["name"].lower(),))
+                    child["count"] = cur.fetchone()[0]
+                parent["subcategories"] = children
+                parent["count"] = sum(c["count"] for c in children)
+            conn.close()
+            return parents
+        else:
+            cur.execute("""
+                SELECT c.name, 
+                       (SELECT COUNT(*) FROM g_map_master_table g WHERE LOWER(g.business_category) = LOWER(c.name)) as count
+                FROM categories c
+                WHERE c.parent_id IS NOT NULL
+                ORDER BY count DESC LIMIT 50
+            """)
+            rows = cur.fetchall()
+            conn.close()
+            return [{"name": r[0], "category": r[0], "count": r[1]} for r in rows if r[0]]
     except Exception as e:
         print(f"Error fetching categories: {e}")
         raise HTTPException(400, str(e))
@@ -890,6 +1714,25 @@ def get_analytics():
         cur.execute("SELECT COUNT(*) as cnt FROM chat_sessions")
         total_chats = cur.fetchone()['cnt']
 
+        # Real-time search history trends (Phases 9 & 10)
+        cur.execute("SELECT COUNT(*) as cnt FROM search_history")
+        total_searches = cur.fetchone()['cnt'] or 0
+
+        cur.execute("""
+            SELECT search_query as name, COUNT(*) as count 
+            FROM search_history 
+            GROUP BY search_query ORDER BY count DESC LIMIT 10
+        """)
+        search_trends = [dict(r) for r in cur.fetchall()]
+
+        # Total registered users
+        cur.execute("SELECT COUNT(*) as cnt FROM users")
+        total_registered_users = cur.fetchone()['cnt'] or 0
+        
+        # Total audit log actions
+        cur.execute("SELECT COUNT(*) as cnt FROM audit_logs")
+        total_audit_logs = cur.fetchone()['cnt'] or 0
+
         conn.close()
 
         return {
@@ -903,8 +1746,10 @@ def get_analytics():
                 "top_rated_count": top_rated,
                 "total_products": total_products,
                 "total_deals": total_deals,
-                "total_users": total_users,
+                "total_users": total_registered_users,
                 "total_chats": total_chats,
+                "total_searches": total_searches,
+                "total_audit_logs": total_audit_logs
             },
             "charts": {
                 "categories_by_count": categories_data,
@@ -913,6 +1758,7 @@ def get_analytics():
                 "ratings_distribution": ratings_dist,
                 "monthly_registrations": monthly_data,
                 "heatmap": heatmap_data,
+                "search_trends": search_trends
             },
             "top_businesses": top_businesses,
         }
@@ -953,6 +1799,29 @@ def create_chat_session(req: ChatSessionCreate):
         print(f"Error creating chat session: {e}")
         raise HTTPException(400, str(e))
 
+class ChatSyncRequest(BaseModel):
+    guest_user_id: str
+    user_id: str
+
+@app.post("/api/chats/sync")
+def sync_guest_chats(req: ChatSyncRequest):
+    """Synchronizes guest chats to the user's account after login by updating the user_id field in the database."""
+    try:
+        conn = get_chat_db()
+        cur = conn.cursor()
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        # Update user_id for all sessions belonging to guest_user_id
+        cur.execute(
+            "UPDATE chat_sessions SET user_id = ?, updated_at = ? WHERE user_id = ?",
+            (req.user_id, now, req.guest_user_id)
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "Guest chats synchronized successfully"}
+    except Exception as e:
+        print(f"Error syncing guest chats: {e}")
+        raise HTTPException(400, str(e))
+
 @app.get("/api/chats")
 def list_chat_sessions(user_id: str):
     """List all chat sessions for a specific user (phone or email). Private — filtered by user_id."""
@@ -960,14 +1829,51 @@ def list_chat_sessions(user_id: str):
         conn = get_chat_db()
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, title, created_at, updated_at FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50",
+            "SELECT id, title, created_at, updated_at, is_pinned FROM chat_sessions WHERE user_id = ? ORDER BY is_pinned DESC, updated_at DESC LIMIT 50",
             (user_id,)
         )
         rows = cur.fetchall()
         conn.close()
-        return [{"session_id": r["id"], "title": r["title"], "created_at": r["created_at"], "updated_at": r["updated_at"]} for r in rows]
+        return [{"session_id": r["id"], "title": r["title"], "created_at": r["created_at"], "updated_at": r["updated_at"], "is_pinned": bool(r["is_pinned"])} for r in rows]
     except Exception as e:
         print(f"Error listing chat sessions: {e}")
+        raise HTTPException(400, str(e))
+
+@app.put("/api/chats/{session_id}")
+def rename_chat_session(session_id: str, req: dict, user_id: Optional[str] = None):
+    title = req.get("title")
+    if not title: raise HTTPException(400, "Title is required")
+    try:
+        conn = get_chat_db()
+        cur = conn.cursor()
+        if user_id:
+            cur.execute("SELECT id FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+            if not cur.fetchone():
+                conn.close()
+                raise HTTPException(403, "Access denied.")
+        cur.execute("UPDATE chat_sessions SET title = ? WHERE id = ?", (title, session_id))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+@app.put("/api/chats/{session_id}/pin")
+def pin_chat_session(session_id: str, req: dict, user_id: Optional[str] = None):
+    is_pinned = req.get("is_pinned", False)
+    try:
+        conn = get_chat_db()
+        cur = conn.cursor()
+        if user_id:
+            cur.execute("SELECT id FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+            if not cur.fetchone():
+                conn.close()
+                raise HTTPException(403, "Access denied.")
+        cur.execute("UPDATE chat_sessions SET is_pinned = ? WHERE id = ?", (1 if is_pinned else 0, session_id))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
         raise HTTPException(400, str(e))
 
 @app.get("/api/chats/{session_id}")

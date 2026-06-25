@@ -205,7 +205,8 @@ const ChatWidget = ({ onClose, initialQuery, onClearInitialQuery, initialAction,
         const biz = res.businesses[0]
         const sessionData = { 
           type: 'BUSINESS', 
-          businessId: biz.global_business_id 
+          businessId: biz.global_business_id,
+          city: biz.city
         }
         if (method === 'phone') sessionData.phone = identifier;
         else {
